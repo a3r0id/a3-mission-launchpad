@@ -1,61 +1,54 @@
 # Launchpad
 
-Launchpad is an integrated build system for Arma 3 Scenarios, featuring in-depth tooling and a simple user-interface.
-Since there are a lot of existing resources for *mod* makers but not many for *mission* makers, I decided to make this tool.
+![Launchpad](launchpad.png)
 
-The purpose of Launchpad is to accelerate mission creation and enforce a standard of project structure, testing and maintainability.
+Launchpad is an integrated build system for Arma 3 Scenarios, featuring in-depth tooling and a simple user-interface. Since there are many existing resources for *mod* makers but few for *mission* makers, this tool was created to fill that gap.
 
-### Installation
--- LLM TODO --
+The purpose of Launchpad is to accelerate mission creation and enforce a standard of project structure, testing, and maintainability.
 
-### Creating a scenario
+## Installation
 
-Launch the suite by running `python3 path/to/launchpad`.
+See the [installation guide](docs/INSTALLATION.md) for detailed setup instructions.
 
-In the main menu, select "Create New Scenario".
+## Quick Start
 
-Follow the onscreen options, and submit the form.
+### Creating a Scenario
 
-If successful, the mission will be added to "Managed Missions" in the main menu.
+1. Launch Launchpad by running `python3 path/to/launchpad`
+2. In the main menu, select **"Create New Scenario"**
+3. Follow the onscreen options and submit the form
+4. Your mission will appear in "Managed Missions"
 
-You are ready to start creating!
+### Editing a Scenario
 
-### Editing a scenario (Managed)
+1. Launch Launchpad (if not already running)
+2. Select **"Managed Missions"** from the main menu
+3. Choose your scenario
+4. Edit settings and macros in the main view
+5. Edit files using your preferred editor via the resource browser
 
-Launch the suite by running `python3 path/to/launchpad`, if it isn't already launched.
+### Adding Project to GitHub
 
-In the main menu, select "Managed Missions".
+1. Launch Launchpad (if not already running)
+2. Select **"Managed Missions"** → choose your scenario
+3. Click **"Add Project to GitHub"**
+4. Follow the onscreen instructions
+5. Your version control section will populate upon success
 
-Select your scenario.
+### Testing Your Project
 
-You can change settings and macros in the main view; and edit files in your file editor of choice via selecting files in the resource browser.
+1. Launch Launchpad (if not already running)
+2. Select **"Managed Missions"** → choose your scenario
+3. Go to the **Testing** tab to run tests across your project
 
-### Adding Project to Git (currently only Github is supported)
+## Features
 
-Launch the suite by running `python3 path/to/launchpad`, if it isn't already launched.
+- Integrated build system for Arma 3 scenarios
+- Project structure standardization
+- Built-in testing framework
+- GitHub integration for version control
+- Intuitive graphical interface
 
-In the main menu, select "Managed Missions".
+## Support
 
-Select your scenario.
-
-Hit "Add Project to Github"
-
-Follow the onscreen instructions.
-
-If successful, you should see the version control section populate.
-
-### Testing Project (Work In progress)
-
-Launch the suite by running `python3 path/to/launchpad`, if it isn't already launched.
-
-In the main menu, select "Managed Missions".
-
-Select your scenario.
-
-Head to the testing tab to launch numerous tests across your managed project.
-
-
-
-
-
-
+For issues, questions, or contributions, please visit the [GitHub Issues](https://github.com/a3r0id/a3-mission-launchpad/issues) page.
