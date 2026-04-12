@@ -17,6 +17,7 @@ dist-ssr
 
 # Editor directories and files
 .vscode/*
+!.vscode/tasks.json
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -29,3 +30,6 @@ dist-ssr
 # Runtime things
 launchpad_data
 bin/A3MissionLaunchpad/launchpad_data
+
+# Build things
+build/

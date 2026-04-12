@@ -14,6 +14,22 @@ export type ManagedScenario = {
 export type UpdateManagedScenarioPayload = {
   name?: string
   map_suffix?: string
+  ext_params?: unknown
+}
+
+export type ProjectTreeNode = {
+  name: string
+  kind: 'dir' | 'file'
+  relPath: string
+  size?: number | null
+  truncated?: boolean
+  children?: ProjectTreeNode[]
+}
+
+export type MissionProjectTreeResponse = {
+  tree: ProjectTreeNode
+  rootName: string
+  truncated?: boolean
 }
 
 export type UpdateManagedScenarioSuccess = {
@@ -41,6 +57,8 @@ export type LaunchpadSettings = {
   arma3_tools_path: string
   /** Arma 3 profile directory (…/Arma 3 - Other Profiles/<name>) — required for new mission builds. */
   arma3_profile_path: string
+  /** Prefills the Author field on New Mission when set. */
+  default_author: string
 }
 
 export type UpdateSettingsSuccess = LaunchpadSettings & { ok: true }
@@ -115,6 +133,24 @@ export async function fetchManagedScenarios(): Promise<ManagedScenario[]> {
   return (await res.json()) as ManagedScenario[]
 }
 
+export async function fetchMissionProjectTree(projectRoot: string): Promise<MissionProjectTreeResponse> {
+  const q = new URLSearchParams({ path: projectRoot })
+  const res = await fetch(apiUrl(`/api/mission/project-tree?${q.toString()}`), {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  })
+  let data: MissionProjectTreeResponse & { error?: string }
+  try {
+    data = (await res.json()) as MissionProjectTreeResponse & { error?: string }
+  } catch {
+    throw new Error(`Invalid response (HTTP ${res.status})`)
+  }
+  if (!res.ok) {
+    throw new Error(typeof data.error === 'string' ? data.error : `Request failed (HTTP ${res.status})`)
+  }
+  return data
+}
+
 export async function updateManagedScenario(
   id: string,
   payload: UpdateManagedScenarioPayload,
@@ -147,10 +183,26 @@ export async function updateManagedScenario(
   return data as UpdateManagedScenarioSuccess
 }
 
-export async function deleteManagedScenario(id: string): Promise<void> {
+export type DeleteManagedScenarioOptions = {
+  /** When true, removes the project directory under launchpad_data/mission_projects (server-enforced). */
+  deleteProjectFiles?: boolean
+}
+
+export async function deleteManagedScenario(
+  id: string,
+  options?: DeleteManagedScenarioOptions,
+): Promise<void> {
+  const payload =
+    options?.deleteProjectFiles != null
+      ? JSON.stringify({ delete_project_files: Boolean(options.deleteProjectFiles) })
+      : undefined
   const res = await fetch(apiUrl(`/api/managed/scenarios/${encodeURIComponent(id)}`), {
     method: 'DELETE',
-    headers: { Accept: 'application/json' },
+    headers: {
+      Accept: 'application/json',
+      ...(payload ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: payload,
   })
   if (!res.ok) {
     let detail = `Request failed (HTTP ${res.status})`
@@ -179,12 +231,21 @@ export async function fetchSettings(): Promise<LaunchpadSettings> {
     }
     throw new Error(detail)
   }
-  return (await res.json()) as LaunchpadSettings
+  const raw = (await res.json()) as Record<string, unknown>
+  return {
+    arma3_path: typeof raw.arma3_path === 'string' ? raw.arma3_path : '',
+    arma3_tools_path: typeof raw.arma3_tools_path === 'string' ? raw.arma3_tools_path : '',
+    arma3_profile_path: typeof raw.arma3_profile_path === 'string' ? raw.arma3_profile_path : '',
+    default_author: typeof raw.default_author === 'string' ? raw.default_author : '',
+  }
 }
 
 export async function updateSettings(
   patch: Partial<
-    Pick<LaunchpadSettings, 'arma3_path' | 'arma3_tools_path' | 'arma3_profile_path'>
+    Pick<
+      LaunchpadSettings,
+      'arma3_path' | 'arma3_tools_path' | 'arma3_profile_path' | 'default_author'
+    >
   >,
 ): Promise<UpdateSettingsSuccess | UpdateSettingsError> {
   const res = await fetch(apiUrl('/api/settings'), {
@@ -212,7 +273,17 @@ export async function updateSettings(
           : `Request failed (HTTP ${res.status})`,
     }
   }
-  return data as UpdateSettingsSuccess
+  const row = data as Record<string, unknown>
+  if (row.ok !== true) {
+    return data as UpdateSettingsError
+  }
+  return {
+    ok: true,
+    arma3_path: typeof row.arma3_path === 'string' ? row.arma3_path : '',
+    arma3_tools_path: typeof row.arma3_tools_path === 'string' ? row.arma3_tools_path : '',
+    arma3_profile_path: typeof row.arma3_profile_path === 'string' ? row.arma3_profile_path : '',
+    default_author: typeof row.default_author === 'string' ? row.default_author : '',
+  }
 }
 
 export async function checkBackendReachable(): Promise<boolean> {

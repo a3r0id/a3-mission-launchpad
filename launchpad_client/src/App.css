@@ -533,6 +533,30 @@
   padding: 24px;
 }
 
+.modal-root-stacked {
+  z-index: 90;
+}
+
+.modal-dialog-confirm {
+  width: min(440px, 100%);
+}
+
+.pbo-overwrite-lead {
+  margin-top: 0;
+}
+
+.pbo-overwrite-path {
+  margin-top: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.pbo-overwrite-actions {
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
 .modal-backdrop {
   position: absolute;
   inset: 0;
@@ -553,6 +577,683 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-md);
+}
+
+.modal-dialog-wide {
+  width: min(960px, 100%);
+  max-height: min(88vh, 920px);
+}
+
+/* —— Mission edit modal (dedicated chrome) —— */
+.mission-edit-dialog {
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  gap: 0;
+}
+
+.mission-edit-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 16px;
+  background: linear-gradient(180deg, var(--bg-subtle) 0%, var(--bg-surface) 100%);
+  border-bottom: 1px solid var(--border);
+}
+
+.mission-edit-header-main {
+  min-width: 0;
+}
+
+.mission-edit-eyebrow {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mission-edit-title {
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--text-heading);
+  font-family: var(--font-mono);
+}
+
+.mission-edit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mission-edit-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-heading);
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+}
+
+.mission-edit-pill-accent {
+  background: var(--accent-soft);
+  border-color: rgba(9, 105, 218, 0.22);
+  color: var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mission-edit-pill-accent {
+    border-color: rgba(88, 166, 255, 0.28);
+  }
+}
+
+.mission-edit-close {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: -6px -6px 0 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.mission-edit-close:hover:not(:disabled) {
+  background: var(--bg-app);
+  border-color: var(--border);
+  color: var(--text-heading);
+}
+
+.mission-edit-close:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.mission-edit-close:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mission-edit-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 12px;
+  margin: 0 10px;
+  margin-top: 10px;
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+}
+
+.mission-edit-nav-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 14px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.mission-edit-nav-btn:hover:not(:disabled):not(.is-active) {
+  color: var(--text-heading);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mission-edit-nav-btn:hover:not(:disabled):not(.is-active) {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.mission-edit-nav-btn.is-active {
+  background: var(--bg-surface);
+  color: var(--text-heading);
+  box-shadow: var(--shadow-sm);
+}
+
+.mission-edit-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mission-edit-surface {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  margin: 14px 16px 0;
+  padding: 18px 20px 20px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+}
+
+.mission-edit-section-flush {
+  flex: 1;
+  min-height: 0;
+  margin: -18px -20px -20px;
+  padding: 0;
+  border: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  overflow: hidden;
+}
+
+.mission-edit-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ``<label>`` is inline by default — force stacked label / input / hint inside the modal. */
+.mission-edit-surface .field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+
+.mission-edit-surface .field-label {
+  flex-shrink: 0;
+}
+
+.mission-edit-surface .field-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.mission-edit-surface .field-hint {
+  margin: 0;
+  line-height: 1.45;
+  max-width: none;
+}
+
+.mission-edit-code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.mission-edit-section-identity .mission-edit-fields-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px 28px;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .mission-edit-section-identity .mission-edit-fields-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+}
+
+.mission-edit-lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 72ch;
+}
+
+.mission-edit-lead strong {
+  color: var(--text-heading);
+}
+
+.mission-edit-field-grow .field-input.mission-ext-json {
+  flex: 1;
+  min-height: min(48vh, 420px);
+  resize: vertical;
+}
+
+.mission-ext-json {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.mission-edit-field-grow {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mission-edit-empty {
+  padding: 28px 22px;
+  text-align: center;
+  background: var(--bg-subtle);
+}
+
+.mission-edit-empty-error {
+  border-top: 1px solid var(--border);
+}
+
+.mission-edit-empty-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.mission-edit-empty-text {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 42ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mission-edit-banner {
+  margin: 0 16px;
+}
+
+.mission-edit-footer {
+  flex-shrink: 0;
+  padding: 14px 20px 18px;
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.mission-edit-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* Resource browser */
+.mission-resource-browser {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mission-resource-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 34%) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.mission-resource-layout > * {
+  min-height: 0;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .mission-resource-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, auto) minmax(0, 1fr);
+  }
+}
+
+.mission-resource-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+@media (max-width: 720px) {
+  .mission-resource-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: min(240px, 40vh);
+    min-height: 0;
+  }
+}
+
+.mission-resource-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.mission-resource-sidebar-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mission-resource-truncate-note {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.mission-resource-tree-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px 4px 10px;
+}
+
+.mission-resource-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-surface);
+}
+
+.mission-resource-editor-head {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mission-resource-editor-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mission-resource-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.mission-resource-placeholder-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.mission-resource-placeholder-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 36ch;
+}
+
+.mission-resource-editor-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 16px 16px;
+  gap: 10px;
+}
+
+.mission-resource-file-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mission-resource-path {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  word-break: break-all;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-heading);
+  font-family: var(--font-mono);
+}
+
+.mission-resource-file-err {
+  margin: 0;
+}
+
+.mission-resource-file-editor {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-body);
+  resize: vertical;
+  tab-size: 2;
+}
+
+.mission-resource-file-editor:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus);
+}
+
+.mission-resource-loading {
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.mission-resource-loading-inline {
+  padding: 24px 12px;
+}
+
+.mission-resource-loading-bar {
+  width: 100%;
+  max-width: 200px;
+  height: 3px;
+  margin: 0 auto 14px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--border) 0%,
+    var(--accent) 50%,
+    var(--border) 100%
+  );
+  background-size: 200% 100%;
+  animation: mission-edit-shimmer 1.1s ease-in-out infinite;
+}
+
+@keyframes mission-edit-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.mission-resource-loading-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* File tree */
+.mission-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mission-tree-nested {
+  padding-left: 2px;
+}
+
+.mission-tree-item {
+  list-style: none;
+}
+
+.mission-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: calc(100% - 4px);
+  margin: 1px 2px;
+  text-align: left;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 5px 6px;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.mission-tree-row-dir {
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.mission-tree-row:hover {
+  background: var(--bg-surface);
+}
+
+.mission-tree-row-file.is-selected {
+  background: var(--accent-soft);
+  outline: 1px solid rgba(9, 105, 218, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mission-tree-row-file.is-selected {
+    outline-color: rgba(88, 166, 255, 0.35);
+  }
+}
+
+.mission-tree-toggle {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.mission-tree-toggle-spacer {
+  visibility: hidden;
+}
+
+.mission-tree-item.is-expanded > .mission-tree-row-dir .mission-tree-toggle::before {
+  transform: rotate(90deg);
+}
+
+.mission-tree-row-dir .mission-tree-toggle::before {
+  content: '';
+  display: block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 5px 0 5px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transform: rotate(0deg);
+  transition: transform 0.15s ease;
+}
+
+.mission-tree-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  margin-right: 4px;
+}
+
+.mission-tree-icon-folder {
+  background: rgba(212, 160, 18, 0.28);
+  border: 1px solid rgba(181, 133, 11, 0.45);
+}
+
+.mission-tree-icon-file {
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mission-tree-icon-folder {
+    background: rgba(201, 162, 39, 0.22);
+    border-color: rgba(201, 162, 39, 0.4);
+  }
+}
+
+.mission-tree-name {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.mission-tree-meta {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 4px;
 }
 
 .modal-dialog .card-title {
@@ -576,9 +1277,53 @@
   word-break: break-all;
 }
 
+/* PBO build modal — same shell as mission edit (wide, padded surface, footer) */
+.pbo-build-dialog {
+  min-height: min(520px, 86vh);
+}
+
+.pbo-build-dialog .mission-edit-surface {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.pbo-build-dialog .pbo-build-section {
+  flex: 1;
+  min-height: 0;
+  gap: 18px;
+}
+
+.pbo-build-dialog .pbo-build-lead {
+  max-width: none;
+}
+
+.pbo-build-dialog .pbo-build-log {
+  flex: 1;
+  min-height: min(220px, 32vh);
+  max-height: min(48vh, 480px);
+}
+
 .modal-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 4px;
+}
+
+.modal-checkbox-field {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+.modal-checkbox-field input {
+  flex-shrink: 0;
+  margin-top: 3px;
 }

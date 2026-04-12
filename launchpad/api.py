@@ -7,7 +7,6 @@ import logging
 import os
 import queue
 import threading
-import uuid
 import shlex
 import shutil
 import subprocess
@@ -55,7 +54,9 @@ def _api_subpath_from_handler_path(handler_path: str) -> str | None:
 
 _MANAGED_MISSIONS_FILE = "managed_missions.json"
 _SETTINGS_FILE = "settings.json"
-_SETTINGS_KEYS = frozenset({"arma3_path", "arma3_tools_path", "arma3_profile_path"})
+_SETTINGS_KEYS = frozenset(
+    {"arma3_path", "arma3_tools_path", "arma3_profile_path", "default_author"}
+)
 
 
 def _managed_missions_path() -> str:
@@ -132,6 +133,27 @@ def _read_managed_missions_raw() -> dict[str, Any]:
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
     return data if isinstance(data, dict) else {}
+
+
+def _mission_projects_root() -> str:
+    return os.path.realpath(os.path.join(_launchpad_data_dir(), "mission_projects"))
+
+
+def _is_strict_child_of_mission_projects(abs_project_dir: str) -> bool:
+    """True if ``abs_project_dir`` is a mission folder inside ``launchpad_data/mission_projects``."""
+    try:
+        root = os.path.realpath(_mission_projects_root())
+        d = os.path.realpath(abs_project_dir)
+    except OSError:
+        return False
+    if not os.path.isdir(d):
+        return False
+    if d == root:
+        return False
+    try:
+        return os.path.commonpath([d, root]) == root
+    except ValueError:
+        return False
 
 
 def _missions_folder_for_type(mission_type: str) -> str:
@@ -339,6 +361,33 @@ def _normalize_mission_pbo_output_path(
     return full, None
 
 
+def _pbo_output_overwrite_gate(pbo_full: str, body: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    If the target ``.pbo`` already exists and the client did not pass ``overwrite: true``,
+    return a 409 response dict. When overwrite is requested, remove the existing file or
+    return an error if removal fails (Windows cannot rename the temp PBO onto an existing path).
+    """
+    overwrite = body.get("overwrite") is True
+    try:
+        exists = os.path.isfile(pbo_full)
+    except OSError as e:
+        return {"_http_status": 500, "error": f"Could not access output path: {e}"}
+    if not exists:
+        return None
+    if not overwrite:
+        return {
+            "_http_status": 409,
+            "error": "A PBO file already exists at the output path.",
+            "code": "pbo_exists",
+            "pboPath": pbo_full,
+        }
+    try:
+        os.unlink(pbo_full)
+    except OSError as e:
+        return {"_http_status": 500, "error": f"Could not remove existing PBO: {e}"}
+    return None
+
+
 def _path_allowed_for_reveal(target_path: str, project_resolved: str | None) -> bool:
     """Whether ``target_path`` may be opened in the system file manager."""
     try:
@@ -462,10 +511,11 @@ class A3LaunchpadAPI:
         if body is None or not isinstance(body, dict):
             return {"_http_status": 400, "error": "Expected a JSON object body."}
 
-        name_in = body.get("name")
-        map_in = body.get("map_suffix")
-        if name_in is None and map_in is None:
-            return {"_http_status": 400, "error": "Provide at least one of: name, map_suffix."}
+        has_name = "name" in body
+        has_map = "map_suffix" in body
+        has_ext = "ext_params" in body
+        if not (has_name or has_map or has_ext):
+            return {"_http_status": 400, "error": "Provide at least one of: name, map_suffix, ext_params."}
 
         all_missions = _read_managed_missions_raw()
         if mission_id not in all_missions or not isinstance(all_missions[mission_id], dict):
@@ -474,8 +524,18 @@ class A3LaunchpadAPI:
         row: dict[str, Any] = dict(all_missions[mission_id])
         old_name = str(row.get("name", "")).strip()
         old_map = str(row.get("map_suffix", "")).strip()
-        new_name = old_name if name_in is None else str(name_in).strip()
-        new_map = old_map if map_in is None else str(map_in).strip()
+        if has_name:
+            if not isinstance(body.get("name"), str):
+                return {"_http_status": 400, "error": "Field name must be a string."}
+            new_name = str(body["name"]).strip()
+        else:
+            new_name = old_name
+        if has_map:
+            if not isinstance(body.get("map_suffix"), str):
+                return {"_http_status": 400, "error": "Field map_suffix must be a string."}
+            new_map = str(body["map_suffix"]).strip()
+        else:
+            new_map = old_map
 
         err = _validate_mission_token(new_name, "Mission name")
         if err:
@@ -539,6 +599,9 @@ class A3LaunchpadAPI:
                 "to enable symlink rename."
             )
 
+        if has_ext:
+            row["ext_params"] = body["ext_params"]
+
         row["name"] = new_name
         row["map_suffix"] = new_map
         all_missions[mission_id] = row
@@ -552,8 +615,64 @@ class A3LaunchpadAPI:
             out["symlink_message"] = symlink_note
         return out
 
+    def handle_mission_project_tree_get(self, handler: BaseHTTPRequestHandler) -> dict[str, Any]:
+        """JSON tree of files under a mission project (names, relative paths, sizes; no file bodies)."""
+        raw = _query_param(handler, "path")
+        if not raw:
+            return {"_http_status": 400, "error": "Missing query parameter: path"}
+        resolved = _path_under_allowed_root(raw.strip())
+        if resolved is None or not os.path.isdir(resolved):
+            return {"_http_status": 404, "error": "Project folder not found or not allowed."}
+
+        max_nodes = 6000
+        count = [0]
+        truncated = [False]
+
+        def walk(abs_p: str, rel_posix: str) -> dict[str, Any]:
+            name = os.path.basename(abs_p)
+            if os.path.isfile(abs_p):
+                if count[0] >= max_nodes:
+                    truncated[0] = True
+                    return {"name": name, "kind": "file", "relPath": rel_posix, "size": None, "truncated": True}
+                count[0] += 1
+                try:
+                    sz = os.path.getsize(abs_p)
+                except OSError:
+                    sz = None
+                return {"name": name, "kind": "file", "relPath": rel_posix, "size": sz}
+            if count[0] >= max_nodes:
+                truncated[0] = True
+                return {"name": name, "kind": "dir", "relPath": rel_posix, "children": [], "truncated": True}
+            count[0] += 1
+            children: list[dict[str, Any]] = []
+            try:
+                entries = sorted(os.listdir(abs_p), key=str.lower)
+            except OSError:
+                return {"name": name, "kind": "dir", "relPath": rel_posix, "children": []}
+            for entry in entries:
+                if count[0] >= max_nodes:
+                    truncated[0] = True
+                    break
+                child_abs = os.path.join(abs_p, entry)
+                child_rel = f"{rel_posix}/{entry}" if rel_posix else entry
+                child_rel = child_rel.replace("\\", "/")
+                children.append(walk(child_abs, child_rel))
+            return {"name": name, "kind": "dir", "relPath": rel_posix, "children": children}
+
+        root_abs = os.path.realpath(resolved)
+        root_name = os.path.basename(root_abs) or root_abs
+        tree = walk(root_abs, "")
+        out: dict[str, Any] = {"tree": tree, "rootName": root_name}
+        if truncated[0]:
+            out["truncated"] = True
+        return out
+
     def handle_managed_scenario_delete(self, mission_id: str, handler: BaseHTTPRequestHandler) -> dict[str, Any]:
-        """Remove a mission from ``managed_missions.json`` and drop its profile symlink when safe."""
+        """Remove a mission from ``managed_missions.json``, optional disk delete, symlink cleanup."""
+        body_raw = _read_json_body(handler)
+        body: dict[str, Any] = body_raw if isinstance(body_raw, dict) else {}
+        delete_project_files = bool(body.get("delete_project_files") or body.get("deleteProjectFiles"))
+
         all_missions = _read_managed_missions_raw()
         if mission_id not in all_missions or not isinstance(all_missions[mission_id], dict):
             return {"_http_status": 404, "error": "Mission not found."}
@@ -563,6 +682,7 @@ class A3LaunchpadAPI:
         map_suffix = str(row.get("map_suffix", "")).strip()
         full = f"{name}.{map_suffix}"
         symlink_note: str | None = None
+        disk_note: str | None = None
 
         project_path = row.get("project_path")
         profile_path = row.get("profile_path")
@@ -588,6 +708,26 @@ class A3LaunchpadAPI:
                 else:
                     symlink_note = "No symlink at profile path to remove."
 
+        if delete_project_files:
+            if not isinstance(project_path, str) or not project_path.strip():
+                return {"_http_status": 400, "error": "No project folder on record; cannot delete from disk."}
+            pp_res = _path_under_allowed_root(project_path.strip())
+            if pp_res is None or not os.path.isdir(pp_res):
+                return {"_http_status": 400, "error": "Project folder not found or path not allowed."}
+            if not _is_strict_child_of_mission_projects(pp_res):
+                return {
+                    "_http_status": 403,
+                    "error": (
+                        "Removing the project from disk is only allowed for folders under "
+                        "launchpad_data/mission_projects."
+                    ),
+                }
+            try:
+                shutil.rmtree(pp_res)
+            except OSError as e:
+                return {"_http_status": 500, "error": f"Could not delete project folder: {e}"}
+            disk_note = "Deleted project folder from disk."
+
         del all_missions[mission_id]
         try:
             _write_json_atomic(_managed_missions_path(), all_missions)
@@ -597,6 +737,8 @@ class A3LaunchpadAPI:
         out: dict[str, Any] = {"ok": True}
         if symlink_note is not None:
             out["symlink_message"] = symlink_note
+        if disk_note is not None:
+            out["disk_message"] = disk_note
         return out
 
     def handle_mission_build_request(self, handler: BaseHTTPRequestHandler):
@@ -640,6 +782,10 @@ class A3LaunchpadAPI:
         err = _validate_mission_token(map_suffix, "Map suffix")
         if err:
             return {"status": 1, "warnings": [], "messages": [], "error": err}
+
+        settings = _read_settings()
+        if not author:
+            author = (settings.get("default_author") or "").strip()
         if not author:
             return {"status": 1, "warnings": [], "messages": [], "error": "Author cannot be empty."}
         if any(c in author for c in ("/", "\\", "\x00")):
@@ -651,7 +797,6 @@ class A3LaunchpadAPI:
         game_type = body.get("game_type", "Unknown")
 
         mission_fullname = f"{name}.{map_suffix}"
-        settings = _read_settings()
         profile_raw = (settings.get("arma3_profile_path") or "").strip()
         if not profile_raw:
             return {
@@ -687,7 +832,17 @@ class A3LaunchpadAPI:
         data_dir = _launchpad_data_dir()
         projects_root = os.path.join(data_dir, "mission_projects")
         os.makedirs(projects_root, exist_ok=True)
-        project_path = os.path.join(projects_root, str(uuid.uuid4()))
+        project_path = os.path.join(projects_root, mission_fullname)
+        if os.path.lexists(project_path):
+            return {
+                "status": 1,
+                "warnings": [],
+                "messages": [],
+                "error": (
+                    f"A mission project folder already exists at {project_path!r}. "
+                    "Use a different mission name or map suffix, or remove that folder first."
+                ),
+            }
 
         desc_params = _build_mission_description_params(author, mission_fullname, game_type)
         config: dict[str, Any] = {
@@ -819,7 +974,7 @@ class A3LaunchpadAPI:
         }
 
     def handle_ipc_settings_get_patch(self, handler: BaseHTTPRequestHandler) -> dict[str, Any]:
-        """Read or update ``launchpad_data/settings.json`` (Arma 3 install paths)."""
+        """Read or update ``launchpad_data/settings.json`` (paths and default mission author)."""
         method = handler.command.upper()
         if method == "GET":
             return _read_settings()
@@ -869,6 +1024,10 @@ class A3LaunchpadAPI:
         pbo_full, out_err = _normalize_mission_pbo_output_path(project_resolved, output_field, pbo_fn)
         if out_err is not None or pbo_full is None:
             return {"_http_status": 400, "error": out_err or "Invalid output path."}
+
+        gate = _pbo_output_overwrite_gate(pbo_full, body)
+        if gate is not None:
+            return gate
 
         want_stream = bool(body.get("stream"))
 
@@ -948,6 +1107,7 @@ class A3LaunchpadAPI:
 
 
 A3LaunchpadAPI.route("/api/mission/build", methods=("GET", "POST"))(A3LaunchpadAPI.handle_mission_build_request)
+A3LaunchpadAPI.route("/api/mission/project-tree", methods=("GET",))(A3LaunchpadAPI.handle_mission_project_tree_get)
 A3LaunchpadAPI.route("/api/managed/scenarios", methods=("GET",))(A3LaunchpadAPI.handle_managed_scenarios_request)
 A3LaunchpadAPI.route("/api/file-contents", methods=("GET",))(A3LaunchpadAPI.handle_ipc_file_contents_get)
 A3LaunchpadAPI.route("/api/file-contents", methods=("PATCH",))(A3LaunchpadAPI.handle_ipc_file_contents_patch)

@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build client and run Launchpad",
+      "type": "shell",
+      "command": "npm run build && cd .. && cmd /c package.bat && cd bin/A3MissionLaunchpad && start A3MissionLaunchpad.exe",
+      "options": {
+        "cwd": "${workspaceFolder}/launchpad_client"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "focus": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

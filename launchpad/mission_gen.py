@@ -72,6 +72,28 @@ def _resolve_event_script_body(meta: dict[str, Any], data_dir: str) -> str | Non
         return None
     return meta.get("content", "")
 
+
+def _sqf_event_params_prefix(meta: dict[str, Any], script_name: str) -> str:
+    """
+    First line for event ``.sqf`` scripts: ``params ["_a", "_b"];`` from ``meta["params"]``.
+    Omitted when the list is empty, or for non-``.sqf`` files (``.sqs`` / ``.fsm`` differ).
+    """
+    if not script_name.lower().endswith(".sqf"):
+        return ""
+    raw = meta.get("params")
+    if not isinstance(raw, list) or not raw:
+        return ""
+    elems: list[str] = []
+    for p in raw:
+        if isinstance(p, str):
+            s = p.strip()
+            if s:
+                elems.append(json.dumps(s))
+    if not elems:
+        return ""
+    return "params [" + ", ".join(elems) + "];\n"
+
+
 # Forges a simple class with the given name and content.
 def forge_simple_class(class_name: str, class_content: dict) -> str:
     return f"class {class_name} {{\n{'\n'.join([f'    {key} = {value}' for key, value in class_content.items()])}\n}}\n\n"
@@ -129,11 +151,14 @@ def generate_description_ext(project_path: str, params = None) -> str:
     if params is None:
         params = dict(Constants.EXT_TEMPLATE)
 
-    # start with the generated code template
-    ext_string = Constants.GENERATED_CODE_TEMPLATE.format(
-        author=params["author"],
-        fileName="description.ext",
-        generationTime=datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S")
+    # start with the generated code template ($… placeholders, not str.format braces)
+    generation_time = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S")
+    author_raw = params.get("author", "")
+    author_text = author_raw if isinstance(author_raw, str) else str(author_raw)
+    ext_string = (
+        Constants.GENERATED_CODE_TEMPLATE.replace("$author", author_text)
+        .replace("$fileName", "description.ext")
+        .replace("$generationTime", generation_time)
     )
 
     # write the classes first
@@ -166,9 +191,11 @@ def generate_scripting_environment(project_path: str, mission_type: Any = Missio
         body = _resolve_event_script_body(meta, data_dir)
         if body is None:
             continue
-        out_path = os.path.join(project_path, meta["name"])
+        script_name = meta["name"]
+        prefix = _sqf_event_params_prefix(meta, script_name)
+        out_path = os.path.join(project_path, script_name)
         with open(out_path, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(body)
+            fh.write(prefix + body)
         logging.info("Wrote event script %s", out_path)
 
 _MANAGED_MISSIONS_FILENAME = "managed_missions.json"

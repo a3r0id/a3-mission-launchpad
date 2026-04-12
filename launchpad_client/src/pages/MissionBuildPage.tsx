@@ -81,6 +81,13 @@ export function MissionBuildPage({ onGoSettings }: MissionBuildPageProps) {
     }
   }, [])
 
+  useEffect(() => {
+    if (settingsGate.status !== 'ready') return
+    const fromSettings = settingsGate.data.default_author.trim()
+    if (!fromSettings) return
+    setForm((f) => (f.author === '' ? { ...f, author: fromSettings } : f))
+  }, [settingsGate])
+
   const profileReady =
     settingsGate.status === 'ready' &&
     settingsGate.data.arma3_profile_path.trim().length > 0
@@ -101,8 +108,13 @@ export function MissionBuildPage({ onGoSettings }: MissionBuildPageProps) {
     e.preventDefault()
     setClientError(null)
     setResult(null)
-    if (!form.mission_name.trim() || !form.map_suffix.trim() || !form.author.trim()) {
-      setClientError('Please fill in mission name, map suffix, and author.')
+    const defaultAuthorTrim =
+      settingsGate.status === 'ready' ? settingsGate.data.default_author.trim() : ''
+    const effectiveAuthor = form.author.trim() || defaultAuthorTrim
+    if (!form.mission_name.trim() || !form.map_suffix.trim() || !effectiveAuthor) {
+      setClientError(
+        'Please fill in mission name and map suffix, and either author or a default author in Settings.',
+      )
       return
     }
     if (!profileReady) {
@@ -119,7 +131,7 @@ export function MissionBuildPage({ onGoSettings }: MissionBuildPageProps) {
         body: JSON.stringify({
           mission_name: form.mission_name.trim(),
           map_suffix: form.map_suffix.trim(),
-          author: form.author.trim(),
+          author: effectiveAuthor,
           network_type: form.network_type,
           generate_scripting_environment: form.generate_scripting_environment,
           game_type: form.game_type,
@@ -300,7 +312,11 @@ export function MissionBuildPage({ onGoSettings }: MissionBuildPageProps) {
             className="btn btn-ghost"
             disabled={busy}
             onClick={() => {
-              setForm(initial)
+              const fallbackAuthor =
+                settingsGate.status === 'ready'
+                  ? settingsGate.data.default_author.trim()
+                  : ''
+              setForm({ ...initial, author: fallbackAuthor })
               setResult(null)
               setClientError(null)
             }}

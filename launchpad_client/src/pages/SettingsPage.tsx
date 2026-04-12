@@ -5,11 +5,16 @@ import {
   type LaunchpadSettings,
 } from '../api/launchpad'
 
+function trimField(v: string | undefined | null): string {
+  return (v ?? '').trim()
+}
+
 function sameSettings(a: LaunchpadSettings, b: LaunchpadSettings) {
   return (
     a.arma3_path === b.arma3_path &&
     a.arma3_tools_path === b.arma3_tools_path &&
-    a.arma3_profile_path === b.arma3_profile_path
+    a.arma3_profile_path === b.arma3_profile_path &&
+    a.default_author === b.default_author
   )
 }
 
@@ -18,6 +23,7 @@ export function SettingsPage() {
   const [arma3Path, setArma3Path] = useState('')
   const [toolsPath, setToolsPath] = useState('')
   const [profilePath, setProfilePath] = useState('')
+  const [defaultAuthor, setDefaultAuthor] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -25,9 +31,10 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false)
 
   const draft: LaunchpadSettings = {
-    arma3_path: arma3Path.trim(),
-    arma3_tools_path: toolsPath.trim(),
-    arma3_profile_path: profilePath.trim(),
+    arma3_path: trimField(arma3Path),
+    arma3_tools_path: trimField(toolsPath),
+    arma3_profile_path: trimField(profilePath),
+    default_author: trimField(defaultAuthor),
   }
 
   const dirty = saved ? !sameSettings(draft, saved) : false
@@ -42,6 +49,7 @@ export function SettingsPage() {
       setArma3Path(s.arma3_path ?? '')
       setToolsPath(s.arma3_tools_path ?? '')
       setProfilePath(s.arma3_profile_path ?? '')
+      setDefaultAuthor(s.default_author ?? '')
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Failed to load settings')
       setSaved(null)
@@ -60,9 +68,10 @@ export function SettingsPage() {
     setSaveOk(false)
     try {
       const res = await updateSettings({
-        arma3_path: arma3Path.trim(),
-        arma3_tools_path: toolsPath.trim(),
-        arma3_profile_path: profilePath.trim(),
+        arma3_path: trimField(arma3Path),
+        arma3_tools_path: trimField(toolsPath),
+        arma3_profile_path: trimField(profilePath),
+        default_author: trimField(defaultAuthor),
       })
       if ('error' in res && res.error) {
         setSaveError(res.error)
@@ -73,13 +82,15 @@ export function SettingsPage() {
         return
       }
       setSaved({
-        arma3_path: res.arma3_path,
-        arma3_tools_path: res.arma3_tools_path,
-        arma3_profile_path: res.arma3_profile_path,
+        arma3_path: res.arma3_path ?? '',
+        arma3_tools_path: res.arma3_tools_path ?? '',
+        arma3_profile_path: res.arma3_profile_path ?? '',
+        default_author: res.default_author ?? '',
       })
-      setArma3Path(res.arma3_path)
-      setToolsPath(res.arma3_tools_path)
-      setProfilePath(res.arma3_profile_path)
+      setArma3Path(res.arma3_path ?? '')
+      setToolsPath(res.arma3_tools_path ?? '')
+      setProfilePath(res.arma3_profile_path ?? '')
+      setDefaultAuthor(res.default_author ?? '')
       setSaveOk(true)
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Save failed')
@@ -90,9 +101,10 @@ export function SettingsPage() {
 
   function onDiscard() {
     if (!saved) return
-    setArma3Path(saved.arma3_path)
-    setToolsPath(saved.arma3_tools_path)
-    setProfilePath(saved.arma3_profile_path)
+    setArma3Path(saved.arma3_path ?? '')
+    setToolsPath(saved.arma3_tools_path ?? '')
+    setProfilePath(saved.arma3_profile_path ?? '')
+    setDefaultAuthor(saved.default_author ?? '')
     setSaveError(null)
     setSaveOk(false)
   }
@@ -185,6 +197,27 @@ export function SettingsPage() {
                 Required for new Missions: the folder that contains <span className="shell-inline-code">missions</span>{' '}
                 and <span className="shell-inline-code">mpmissions</span> (where the launcher creates the scenario
                 symlink).
+              </span>
+            </label>
+
+            <label className="field">
+              <span className="field-label">Default author</span>
+              <input
+                className="field-input"
+                name="default_author"
+                type="text"
+                autoComplete="name"
+                spellCheck={false}
+                placeholder="Your name or team"
+                value={defaultAuthor}
+                onChange={(e) => {
+                  setDefaultAuthor(e.target.value)
+                  setSaveOk(false)
+                }}
+              />
+              <span className="field-hint">
+                Prefills the Author field on New Mission. If you leave Author empty there, this value is still used for
+                the build.
               </span>
             </label>
 

@@ -19,6 +19,19 @@ export type BuildPboResult = {
   pboPath?: string
   log?: string[]
   error?: string
+  code?: string
+}
+
+/** Server returned HTTP 409: target ``.pbo`` path already exists; user may confirm overwrite. */
+export class PboOutputExistsError extends Error {
+  readonly code = 'pbo_exists' as const
+  readonly pboPath: string
+
+  constructor(pboPath: string, message?: string) {
+    super(message ?? `A PBO file already exists at the output path: ${pboPath}`)
+    this.name = 'PboOutputExistsError'
+    this.pboPath = pboPath
+  }
 }
 
 class Util {
@@ -75,11 +88,15 @@ class Util {
     projectPath: string,
     outputPath?: string,
     missionIdentity?: { missionName: string; mapSuffix: string },
+    options?: { overwrite?: boolean },
   ): Promise<BuildPboResult> {
     const body: Record<string, unknown> = {
       project_path: projectPath,
       output_path: outputPath?.trim() ?? '',
       stream: false,
+    }
+    if (options?.overwrite) {
+      body.overwrite = true
     }
     const n = missionIdentity?.missionName?.trim()
     const m = missionIdentity?.mapSuffix?.trim()
@@ -94,6 +111,15 @@ class Util {
     })
     const data = (await response.json().catch(() => ({}))) as BuildPboResult & {
       error?: string
+      code?: string
+    }
+    if (response.status === 409 && data.code === 'pbo_exists') {
+      return {
+        ok: false,
+        code: 'pbo_exists',
+        pboPath: typeof data.pboPath === 'string' ? data.pboPath : undefined,
+        error: data.error,
+      }
     }
     if (!response.ok) {
       return { ok: false, error: data.error ?? response.statusText }
@@ -109,11 +135,15 @@ class Util {
     outputPath: string | undefined,
     onEvent: (ev: BuildPboStreamEvent) => void,
     missionIdentity?: { missionName: string; mapSuffix: string },
+    options?: { overwrite?: boolean },
   ): Promise<void> {
     const body: Record<string, unknown> = {
       project_path: projectPath,
       output_path: outputPath?.trim() ?? '',
       stream: true,
+    }
+    if (options?.overwrite) {
+      body.overwrite = true
     }
     const n = missionIdentity?.missionName?.trim()
     const m = missionIdentity?.mapSuffix?.trim()
@@ -126,6 +156,20 @@ class Util {
       headers: jsonHeaders,
       body: JSON.stringify(body),
     })
+    if (response.status === 409) {
+      const data = (await response.json().catch(() => ({}))) as {
+        code?: string
+        pboPath?: string
+        error?: string
+      }
+      if (data.code === 'pbo_exists') {
+        throw new PboOutputExistsError(
+          typeof data.pboPath === 'string' ? data.pboPath : '',
+          typeof data.error === 'string' ? data.error : undefined,
+        )
+      }
+      throw new Error(data.error ?? 'Request conflict (409).')
+    }
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText)
       throw new Error(errText || response.statusText)
