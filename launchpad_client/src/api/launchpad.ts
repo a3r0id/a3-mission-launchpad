@@ -11,6 +11,15 @@ export type ManagedScenario = {
   profile_path?: string
 }
 
+/** Game type from Description.ext header (`ext_params.header.gameType` on the API row). */
+export function gameTypeFromExtParams(ext: unknown): string {
+  if (!ext || typeof ext !== 'object') return ''
+  const header = (ext as { header?: unknown }).header
+  if (!header || typeof header !== 'object') return ''
+  const gt = (header as { gameType?: unknown }).gameType
+  return typeof gt === 'string' ? gt.trim() : ''
+}
+
 export type UpdateManagedScenarioPayload = {
   name?: string
   map_suffix?: string

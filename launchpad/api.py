@@ -114,7 +114,7 @@ def _build_mission_description_params(
     display_name: str,
     game_type_raw: Any,
 ) -> dict[str, Any]:
-    """Build ``description.ext`` parameter dict from templates and user input."""
+    """Build ``Description.ext`` parameter dict from templates and user input."""
     params = copy.deepcopy(Constants.EXT_TEMPLATE)
     params["author"] = author
     params["onLoadName"] = display_name
@@ -318,7 +318,7 @@ def _mission_pbo_output_parent_allowed(pbo_full: str, project_resolved: str) -> 
     Return ``None`` if the parent directory of ``pbo_full`` may receive the PBO.
 
     Allowed: parent under :func:`_path_under_allowed_root`, or same parent directory as
-    the mission folder (typical “PBO next to the mission folder” layout).
+    the mission folder (typical "PBO next to the mission folder" layout).
     """
     try:
         parent = os.path.realpath(os.path.dirname(os.path.abspath(os.path.normpath(pbo_full))))
@@ -445,7 +445,7 @@ class A3LaunchpadAPI:
     """
     HTTP JSON handlers are registered with :meth:`route` and invoked by the server via :meth:`dispatch`.
 
-    Handlers are ``(api, handler) -> JSON-serializable`` — the second argument is the
+    Handlers are ``(api, handler) -> JSON-serializable`` - the second argument is the
     :class:`http.server.BaseHTTPRequestHandler` instance (path, headers, ``rfile``, etc.).
     """
 
@@ -825,7 +825,7 @@ class A3LaunchpadAPI:
                 "messages": [],
                 "error": (
                     "Arma profile path must be an existing folder, typically "
-                    r"'…\Documents\Arma 3 - Other Profiles\<YourProfile>'."
+                    r"'...\Documents\Arma 3 - Other Profiles\<YourProfile>'."
                 ),
             }
 

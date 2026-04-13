@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { updateManagedScenario, type ManagedScenario } from '../api/launchpad'
+import { gameTypeFromExtParams, updateManagedScenario, type ManagedScenario } from '../api/launchpad'
 import { MissionResourceBrowser } from './MissionResourceBrowser'
 
 function stringifyExt(value: unknown): string {
@@ -82,8 +82,11 @@ export function MissionEditModal({ mission, onClose, onSaved, onMissionUpdated }
               {fullPreview}
             </h2>
             <div className="mission-edit-meta" aria-label="Mission summary">
-              <span className="mission-edit-pill">{mission.author || '—'}</span>
-              <span className="mission-edit-pill mission-edit-pill-accent">{mission.mission_type}</span>
+              <span className="mission-edit-pill">By {mission.author || '—'}</span>
+              <span className="mission-edit-pill mission-edit-pill-accent">{mission.mission_type?.toUpperCase() || '—'}</span>
+              <span className="mission-edit-pill mission-edit-pill-accent">
+                {gameTypeFromExtParams(mission.ext_params).toUpperCase() || '—'}
+              </span>
             </div>
           </div>
           <button

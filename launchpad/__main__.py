@@ -227,7 +227,7 @@ class A3Launchpad:
         self._dist_dir = bundled if os.path.isdir(bundled) else dev
         if not os.path.isdir(self._dist_dir):
             logger.warning(
-                "Client dist directory missing at %s — run npm run build in launchpad_client",
+                "Client dist directory missing at %s - run npm run build in launchpad_client",
                 self._dist_dir,
             )
         handler_cls = make_request_handler(self.api, self._dist_dir)

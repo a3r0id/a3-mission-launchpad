@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { deleteManagedScenario, fetchManagedScenarios, type ManagedScenario } from '../api/launchpad'
+import { deleteManagedScenario, fetchManagedScenarios, gameTypeFromExtParams, type ManagedScenario } from '../api/launchpad'
 import { MissionEditModal } from '../components/MissionEditModal'
 import Util, { PboOutputExistsError } from '../Util'
 
@@ -25,6 +25,16 @@ function parentDir(projectPath: string) {
   return i === -1 ? '' : x.slice(0, i)
 }
 
+/** Parent of the mission folder + `output` (for Launchpad missions, that is `.../mission_projects/output`). */
+function defaultPboOutputFolder(projectPath: string | undefined): string {
+  const p = (projectPath ?? '').trim()
+  if (!p) return ''
+  const root = parentDir(p)
+  if (!root) return ''
+  const sep = /\\/.test(p) && !/\//.test(p) ? '\\' : '/'
+  return `${root.replace(/[/\\]+$/, '')}${sep}output`
+}
+
 export function MissionListPage() {
   const [scenarios, setScenarios] = useState<ManagedScenario[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,7 +58,7 @@ export function MissionListPage() {
 
   function openPboModal(s: ManagedScenario) {
     setPboMission(s)
-    setPboOutDir(parentDir(s.project_path ?? ''))
+    setPboOutDir(defaultPboOutputFolder(s.project_path))
     setPboLogLines([])
     setPboErr(null)
     setPboResultPath(null)
@@ -253,9 +263,10 @@ export function MissionListPage() {
                   <strong>
                     {fullMissionName(pboMission)}.pbo
                   </strong>
-                  . Leave the folder blank to write next to the mission folder, or set a parent directory.
-                  You can paste a full path ending in <code className="mission-edit-code">.pbo</code> — only the
-                  parent folder is used; the filename stays as above.
+                  . By default the folder below is <code className="mission-edit-code">mission_projects/output</code>{' '}
+                  (next to your mission folders). Clear it to write beside the mission folder, or set another parent
+                  directory. You can paste a full path ending in <code className="mission-edit-code">.pbo</code> - only
+                  the parent folder is used; the filename stays as above.
                 </p>
 
                 <label className="field">
@@ -268,10 +279,11 @@ export function MissionListPage() {
                     value={pboOutDir}
                     onChange={(ev) => setPboOutDir(ev.target.value)}
                     disabled={pboBusy}
-                    placeholder="Leave blank to place next to the mission folder"
+                    placeholder="mission_projects/output (default)"
                   />
                   <span className="field-hint">
-                    Full path to a directory, or empty for the default beside the mission.
+                    Full path to a directory. Empty uses the PBO next to the mission folder (not the shared output
+                    folder).
                   </span>
                 </label>
 
@@ -408,8 +420,11 @@ export function MissionListPage() {
                   <div className="mission-list-main">
                     <div className="mission-list-title">{fullMissionName(scenario)}</div>
                     <div className="mission-list-meta">
-                      <span>{scenario.author}</span>
+                      <span>By {scenario.author}</span>
                       <span className="mission-list-pill">{scenario.mission_type}</span>
+                      <span className="mission-list-pill mission-list-pill-accent">
+                        {gameTypeFromExtParams(scenario.ext_params).toUpperCase() || '—'}
+                      </span>
                       {hasSymlinkPaths(scenario) ? (
                         <span className="mission-list-pill mission-list-pill-on">Symlink data</span>
                       ) : (

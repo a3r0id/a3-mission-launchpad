@@ -145,19 +145,19 @@ def generate_mission_sqm(author: str, project_path: str) -> str:
         file.write(Constants.SQM_TEMPLATE.replace("$author", author).replace("$randomSeed", str(generate_random_seed())))
     return os.path.join(project_path, "mission.sqm")
 
-# Generates a default description.ext file with the given author and new random seed.
+# Generates a default Description.ext file with the given author and new random seed.
 def generate_description_ext(project_path: str, params = None) -> str:
 
     if params is None:
         params = dict(Constants.EXT_TEMPLATE)
 
-    # start with the generated code template ($… placeholders, not str.format braces)
+    # start with the generated code template ($... placeholders, not str.format braces)
     generation_time = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S")
     author_raw = params.get("author", "")
     author_text = author_raw if isinstance(author_raw, str) else str(author_raw)
     ext_string = (
         Constants.GENERATED_CODE_TEMPLATE.replace("$author", author_text)
-        .replace("$fileName", "description.ext")
+        .replace("$fileName", "Description.ext")
         .replace("$generationTime", generation_time)
     )
 
@@ -170,10 +170,10 @@ def generate_description_ext(project_path: str, params = None) -> str:
     for key in loose_keys:
         ext_string += f"{key} = {f"\"{params[key]}\"" if isinstance(params[key], str) else params[key]};\n"
 
-    with open(os.path.join(project_path, "description.ext"), "w") as file:
+    with open(os.path.join(project_path, "Description.ext"), "w") as file:
         file.write(ext_string)
 
-    return os.path.join(project_path, "description.ext")
+    return os.path.join(project_path, "Description.ext")
 
 # Generates a scripting environment for the mission.
 def generate_scripting_environment(project_path: str, mission_type: Any = MissionType.MP):
@@ -263,8 +263,8 @@ def generate(config: dict) -> tuple[str, list[str]]:
     logging.info("Generating mission.sqm file: %s", sqm_path)
     generate_mission_sqm(config["author"], project_path)
 
-    desc_path = os.path.join(project_path, "description.ext")
-    logging.info("Generating description.ext file: %s", desc_path)
+    desc_path = os.path.join(project_path, "Description.ext")
+    logging.info("Generating Description.ext file: %s", desc_path)
     generate_description_ext(project_path, config["description_ext_params"])
 
     if config.get("generate_scripting_environment"):

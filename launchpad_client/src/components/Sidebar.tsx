@@ -16,7 +16,7 @@ export function Sidebar({ active, onSelect }: Props) {
   return (
     <aside className="shell-sidebar" aria-label="Primary">
       <div className="shell-brand">
-        <img src="/38f9fcd3-0102-4999-b3c7-351783e7e0e4.png" alt="Mission Launchpad" className="shell-brand-logo" width={36} height={32} />
+        <img src="/hero.png" alt="Mission Launchpad" className="shell-brand-logo" width={36} height={32} />
         <div>
           <div className="shell-brand-title">Mission Launchpad</div>
           <div className="shell-brand-sub">Arma 3 Scenario Toolkit</div>
