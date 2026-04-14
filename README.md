@@ -45,24 +45,6 @@ Install Launchpad via a cross-platform installer or build from source. For more 
 
 ---
 
-## What you get
-
-- A **build workflow** aimed at Arma 3 scenarios, not generic “some folder of files.”
-- **Consistent project layout** so missions stay easier to navigate and hand off.
-- A **testing** tab so you can catch issues without only relying on in-game trial and error.
-- **GitHub integration** when you are ready for backups and collaboration.
-- A **graphical interface** so common tasks do not depend on memorizing commands.
-
----
-
-## Electron + Vite (optional dev shell)
-
-From `launchpad_client/app`, `npm run dev` starts the API and opens the Electron window with the Vite renderer. The dev helper prefers a **PyInstaller** build under `A3LaunchPad/bin/` when it exists (same layout as releases); otherwise it runs `python -m launchpad_server`. Set `LAUNCHPAD_USE_PYTHON=1` to always use the interpreter, or `LAUNCHPAD_BACKEND_EXE` to point at a specific binary.
-
-`python package.py package` (and `python build.py`) stages **`A3LaunchPad/web_dist`**, **`A3LaunchPad/bin`**, **`A3LaunchPad/mod`**, and runs Electron Forge **`package`** into a fresh **`build/electron-forge-*`** folder (avoids Windows file locks on **`launchpad_client/app/out`**), then copies that output to **`A3LaunchPad/app`**. The frozen Python server loads the UI from `web_dist` beside `bin`, and stores **`launchpad_data`** at **`A3LaunchPad/launchpad_data`**. For installers, run `npm run make` in `launchpad_client/app` after a full package; use **`npm run publish`** with a GitHub token to push to Releases (see [Installation](docs/INSTALLATION.md)). In the desktop app, **Settings → Check for updates** compares your version to **`version.json`** on `main` and can open the latest release download page.
-
----
-
 ## Need help?
 
 Open an issue on [GitHub](https://github.com/a3r0id/a3-mission-launchpad/issues) for bugs, questions, or ideas. Include what you tried and what you expected to happen—that makes it much easier to help.
