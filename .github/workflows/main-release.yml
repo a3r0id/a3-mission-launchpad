@@ -206,3 +206,21 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-deliverables:
+    name: Build and publish deliverables
+    runs-on: windows-latest
+    needs: [version, persist-version, release]
+    if: needs.version.outputs.version_bumped == 'true'
+    steps:
+      - name: Checkout main (with version bump commit)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Build and upload installer assets
+        uses: ./.github/actions/publish-deliverables.yml
+        with:
+          version: ${{ needs.version.outputs.new_version }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
