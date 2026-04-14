@@ -37,6 +37,48 @@ function prunePackagerLocales(buildPath, platform) {
   }
 }
 
+function hasExternalBinary(name) {
+  const delimiter = process.platform === 'win32' ? ';' : ':';
+  const pathEntries = (process.env.PATH || '').split(delimiter).filter(Boolean);
+  const extensions = process.platform === 'win32'
+    ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')
+    : [''];
+
+  for (const entry of pathEntries) {
+    for (const ext of extensions) {
+      const candidate = path.join(entry, `${name}${ext}`);
+      if (fs.existsSync(candidate)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+const makers = [
+  {
+    name: '@electron-forge/maker-squirrel',
+    config: {
+      setupIcon: appIconIco,
+    },
+  },
+  {
+    name: '@electron-forge/maker-zip',
+    platforms: ['darwin'],
+  },
+  {
+    name: '@electron-forge/maker-deb',
+    config: {},
+  },
+];
+
+if (process.platform !== 'linux' || hasExternalBinary('rpmbuild')) {
+  makers.push({
+    name: '@electron-forge/maker-rpm',
+    config: {},
+  });
+}
+
 module.exports = {
   outDir,
   packagerConfig: {
@@ -55,26 +97,7 @@ module.exports = {
     ...(extraResource.length ? { extraResource } : {}),
   },
   rebuildConfig: {},
-  makers: [
-    {
-      name: '@electron-forge/maker-squirrel',
-      config: {
-        setupIcon: appIconIco,
-      },
-    },
-    {
-      name: '@electron-forge/maker-zip',
-      platforms: ['darwin'],
-    },
-    {
-      name: '@electron-forge/maker-deb',
-      config: {},
-    },
-    {
-      name: '@electron-forge/maker-rpm',
-      config: {},
-    },
-  ],
+  makers,
   plugins: [
     {
       name: '@electron-forge/plugin-vite',

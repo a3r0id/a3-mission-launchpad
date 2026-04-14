@@ -96,10 +96,10 @@ class Main {
 
 		// On before quit, kill the Python backend if it's running
 		app.on('before-quit', () => {
-		if (this.pythonBackendChild && !this.pythonBackendChild.killed) {
-			this.pythonBackendChild.kill();
-			this.pythonBackendChild = null;
-		}
+			if (this.pythonBackendChild && !this.pythonBackendChild.killed) {
+				this.pythonBackendChild.kill();
+				this.pythonBackendChild = null;
+			}
 		});
 
 		// On window all closed, quit the app if it's not on macOS
