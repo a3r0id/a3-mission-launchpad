@@ -29,6 +29,9 @@ runs:
       with:
         node-version: "20"
 
+    - name: Setup HEMTT
+      uses: arma-actions/hemtt@v1
+
     - name: Install Python dependencies
       shell: bash
       run: |

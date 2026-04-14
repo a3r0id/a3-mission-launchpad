@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import sys
 
@@ -33,8 +34,20 @@ def main():
         build_cmd += ["--config", "Release"]
     subprocess.run(build_cmd, cwd=repo_root, check=True)
 
-    # build the mod (HEMTT)
-    _run_cmd(["hemtt", "build"], cwd=mod_root)
+    # build the mod (HEMTT). In CI environments where HEMTT is not installed,
+    # continue packaging and let package.py stage whatever mod artifacts exist.
+    require_hemtt = os.environ.get("LAUNCHPAD_REQUIRE_HEMTT", "0") == "1"
+    if shutil.which("hemtt"):
+        _run_cmd(["hemtt", "build"], cwd=mod_root)
+    elif require_hemtt:
+        raise FileNotFoundError(
+            "HEMTT was not found on PATH, but LAUNCHPAD_REQUIRE_HEMTT=1 is set."
+        )
+    else:
+        print(
+            "Warning: HEMTT is not installed; skipping 'hemtt build'. "
+            "Install HEMTT or set LAUNCHPAD_REQUIRE_HEMTT=1 to make this step mandatory."
+        )
 
     # package the app (same interpreter as this script)
     subprocess.run([sys.executable, "package.py", "package"], cwd=repo_root, check=True)
