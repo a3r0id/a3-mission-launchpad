@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  mad-ext-build:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - ../..:/workspace:cached
+    working_dir: /workspace/extension
+    command: /bin/bash
+    stdin_open: true
+    tty: true
