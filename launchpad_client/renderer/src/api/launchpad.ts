@@ -839,10 +839,13 @@ export type RptFileEntry = {
   modified_ts: number
 }
 
+export type RptLogListLocation = 'profile' | 'tools'
+
 export type RptFileListResponse = {
   ok: true
   folder: string
   rpt_files: RptFileEntry[]
+  location?: RptLogListLocation
 }
 
 export type PartialFileContentsResponse = {
@@ -898,8 +901,9 @@ export async function killArmaProcess(pid: number): Promise<void> {
   }
 }
 
-export async function fetchRptFiles(): Promise<RptFileListResponse> {
-  const res = await fetch(apiUrl('/api/list-rpt-files'), {
+export async function fetchRptFiles(location: RptLogListLocation = 'profile'): Promise<RptFileListResponse> {
+  const qs = location === 'tools' ? '?location=tools' : ''
+  const res = await fetch(apiUrl(`/api/list-rpt-files${qs}`), {
     method: 'GET',
     headers: { Accept: 'application/json' },
   })

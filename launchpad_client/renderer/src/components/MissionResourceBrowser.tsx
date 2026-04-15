@@ -44,7 +44,10 @@ function TreeBranch({
   const open = isDir ? expanded.has(rel) : false
 
   return (
-    <li className={`mission-tree-item${isDir && open ? ' is-expanded' : ''}`} style={{ paddingLeft: 6 + depth * 14 }}>
+    <li
+      className={`mission-tree-item${isDir && open ? ' is-expanded' : ''}`}
+      style={{ paddingLeft: depth <= 2 ? depth * 8 : 16 + (depth - 2) * 2 }}
+    >
       {isDir ? (
         <button
           type="button"

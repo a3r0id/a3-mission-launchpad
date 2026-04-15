@@ -1,9 +1,9 @@
+20||20||1||27||warning||Variable should not be all caps: A3_LAUNCHPAD_EXT_CALLBACKS||all caps variable||/addons/a3_launchpad_ext_core/functions/fn_asyncCall.sqf
 21||21||37||63||warning||Variable should not be all caps: A3_LAUNCHPAD_EXT_CALLBACKS||all caps variable||/addons/a3_launchpad_ext_core/functions/fn_init.sqf
 22||22||33||59||warning||Variable should not be all caps: A3_LAUNCHPAD_EXT_CALLBACKS||all caps variable||/addons/a3_launchpad_ext_core/functions/fn_init.sqf
 19||19||1||27||warning||Variable should not be all caps: A3_LAUNCHPAD_EXT_CALLBACKS||all caps variable||/addons/a3_launchpad_ext_core/functions/fn_call.sqf
 52||52||22||48||warning||Variable should not be all caps: A3_LAUNCHPAD_EXT_CALLBACKS||all caps variable||/addons/a3_launchpad_ext_core/functions/fn_call.sqf
 57||57||33||59||warning||Variable should not be all caps: A3_LAUNCHPAD_EXT_CALLBACKS||all caps variable||/addons/a3_launchpad_ext_core/functions/fn_call.sqf
 73||73||1||27||warning||Variable should not be all caps: A3_LAUNCHPAD_EXT_CALLBACKS||all caps variable||/addons/a3_launchpad_ext_core/functions/fn_call.sqf
-20||20||1||27||warning||Variable should not be all caps: A3_LAUNCHPAD_EXT_CALLBACKS||all caps variable||/addons/a3_launchpad_ext_core/functions/fn_asyncCall.sqf
 15||15||18||44||warning||Variable should not be all caps: A3_LAUNCHPAD_EXT_CALLBACKS||all caps variable||/addons/a3_launchpad_ext_core/functions/fn_getCallbackStatus.sqf
 18||18||29||55||warning||Variable should not be all caps: A3_LAUNCHPAD_EXT_CALLBACKS||all caps variable||/addons/a3_launchpad_ext_core/functions/fn_getCallbackStatus.sqf

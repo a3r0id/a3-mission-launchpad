@@ -7,6 +7,17 @@ import threading
 from typing import Optional
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+class _LaunchpadHTTPServer(ThreadingHTTPServer):
+    """Suppress tracebacks for normal client disconnects (e.g. devtools / app exit)."""
+
+    def handle_error(self, request, client_address):
+        _, exc, _ = sys.exc_info()
+        if isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+            logger.debug("Client disconnected while handling request from %s", client_address)
+            return
+        super().handle_error(request, client_address)
 from urllib.parse import unquote, urlparse
 
 from api import A3LaunchpadAPI, NdjsonStream
@@ -44,12 +55,13 @@ def _close_pyinstaller_splash() -> None:
     """Bootloader splash stays until closed; no-op when not frozen / no splash."""
     try:
         import pyi_splash
+
+        pyi_splash.close()
     except ImportError:
         return
-    try:
-        pyi_splash.close()
     except Exception:
-        pass
+        # pyi_splash may raise KeyError (missing _PYI_SPLASH_IPC) when frozen without splash.
+        return
 
 
 def _bundle_root() -> str:
@@ -254,7 +266,7 @@ class A3Launchpad:
                 self._dist_dir,
             )
         handler_cls = make_request_handler(self.api, self._dist_dir)
-        self.server = ThreadingHTTPServer((self.config["host"], self.config["port"]), handler_cls)
+        self.server = _LaunchpadHTTPServer((self.config["host"], self.config["port"]), handler_cls)
         # threading.Thread(target=self.open_browser).start()
         _close_pyinstaller_splash()
         self.start()

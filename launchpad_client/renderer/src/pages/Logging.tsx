@@ -3,6 +3,7 @@ import {
   fetchPartialFileContents,
   fetchRptFiles,
   type RptFileEntry,
+  type RptLogListLocation,
 } from '../api/launchpad'
 
 const POLL_MS = 1250
@@ -43,6 +44,7 @@ function escapeRegex(text: string): string {
 }
 
 export function LoggingPage() {
+  const [logFolderKind, setLogFolderKind] = useState<RptLogListLocation>('profile')
   const [files, setFiles] = useState<RptFileEntry[]>([])
   const [folder, setFolder] = useState('')
   const [selectedPath, setSelectedPath] = useState('')
@@ -58,6 +60,7 @@ export function LoggingPage() {
   const [findQuery, setFindQuery] = useState('')
   const [activeMatchIdx, setActiveMatchIdx] = useState(0)
   const logPaneRef = useRef<HTMLDivElement | null>(null)
+  const listReqIdRef = useRef(0)
 
   const selected = useMemo(
     () => files.find((f) => f.path === selectedPath) ?? null,
@@ -76,11 +79,14 @@ export function LoggingPage() {
     el.scrollTop = el.scrollHeight
   }, [])
 
-  const refreshList = useCallback(async () => {
+  const refreshList = useCallback(async (source: RptLogListLocation = logFolderKind) => {
+    const reqId = listReqIdRef.current + 1
+    listReqIdRef.current = reqId
     setLoadingList(true)
     setListErr(null)
     try {
-      const res = await fetchRptFiles()
+      const res = await fetchRptFiles(source)
+      if (listReqIdRef.current !== reqId) return
       setFiles(res.rpt_files)
       setFolder(res.folder)
       if (!selectedPath && res.rpt_files.length > 0) {
@@ -89,12 +95,13 @@ export function LoggingPage() {
         setSelectedPath(res.rpt_files[0]?.path ?? '')
       }
     } catch (e) {
+      if (listReqIdRef.current !== reqId) return
       setListErr(e instanceof Error ? e.message : 'Could not list log files')
       setFiles([])
     } finally {
-      setLoadingList(false)
+      if (listReqIdRef.current === reqId) setLoadingList(false)
     }
-  }, [selectedPath])
+  }, [selectedPath, logFolderKind])
 
   useEffect(() => {
     void refreshList()
@@ -232,14 +239,55 @@ export function LoggingPage() {
     })
   }
 
+  function switchLogSource(source: RptLogListLocation) {
+    if (source === logFolderKind) return
+    setLogFolderKind(source)
+    setSelectedPath('')
+    setFiles([])
+    setFolder('')
+    setTailText('')
+    setCursor(0)
+    setFileSize(0)
+    setTailErr(null)
+  }
+
   return (
     <div className="page-stack logging-page">
       <header className="page-header">
         <h1 className="page-title">Logs</h1>
-        <p className="page-lead">Select an Arma RPT file and follow it live while the game runs.</p>
+        <p className="page-lead">
+          Open an RPT from your game profile or from Arma 3 Tools and follow it live while things run.
+        </p>
       </header>
 
       <section className="card form-card">
+        <div className="logging-source-row">
+          <span className="field-label" id="logging-source-label">
+            Logs from
+          </span>
+          <div
+            className="logging-source-switch"
+            role="group"
+            aria-labelledby="logging-source-label"
+          >
+            <button
+              type="button"
+              className={`logging-source-btn${logFolderKind === 'profile' ? ' is-active' : ''}`}
+              onClick={() => switchLogSource('profile')}
+              aria-pressed={logFolderKind === 'profile'}
+            >
+              Profile
+            </button>
+            <button
+              type="button"
+              className={`logging-source-btn${logFolderKind === 'tools' ? ' is-active' : ''}`}
+              onClick={() => switchLogSource('tools')}
+              aria-pressed={logFolderKind === 'tools'}
+            >
+              Tools
+            </button>
+          </div>
+        </div>
         <div className="logging-toolbar">
           <label className="field logging-file-select">
             <span className="field-label">RPT file</span>

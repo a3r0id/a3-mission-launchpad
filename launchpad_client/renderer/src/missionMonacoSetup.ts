@@ -3,11 +3,17 @@ import { shikiToMonaco } from '@shikijs/monaco'
 import { createBundledHighlighter } from '@shikijs/core'
 import { createOnigurumaEngine } from '@shikijs/engine-oniguruma'
 import type { Monaco } from '@monaco-editor/react'
+import * as monacoEditor from 'monaco-editor'
 
 import extGrammar from '../../../launchpad_server/thirdparty/syntax/ext.min.json'
 import sqfGrammar from '../../../launchpad_server/thirdparty/syntax/sqf.min.json'
 
 const MISSION_EDITOR_THEME = 'dark-plus' as const
+
+// In Electron production builds, Monaco's default loader path can resolve to an invalid
+// local file path when it falls back to CDN URLs. Provide the bundled Monaco instance
+// directly so workers/assets are loaded from the app bundle instead.
+loader.config({ monaco: monacoEditor })
 
 /** Fine-grained bundle: avoid ``import from 'shiki'`` (pulls every language into ``web_dist``). */
 const createHighlighter = createBundledHighlighter({

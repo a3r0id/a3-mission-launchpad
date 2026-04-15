@@ -268,9 +268,9 @@ export function ArmaProcessMonitor() {
       <div className="proc-monitor-header">
         <div>
           <h2 className="card-title proc-monitor-title">Session radar</h2>
-          <p className="proc-monitor-lead">
+          {/* <p className="proc-monitor-lead">
             Live load and memory for every game process on this machine. Pause anytime—nothing leaves your PC.
-          </p>
+          </p> */}
         </div>
         <div className="proc-monitor-controls">
           <span

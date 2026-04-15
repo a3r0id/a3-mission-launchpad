@@ -11,8 +11,8 @@
 ## Installing Launchpad
 
 Install Launchpad via a cross-platform installer or build from source. For more info see [Installation](docs/INSTALLATION.md).
-- **Download a release** — Install the latest release.
-- **Build from source** — Clone the project, run `cd a3-mission-launchpad && python3 build.py`.
+- **Download a release** — Install a release from the [releases](/releases) page.
+- **Build from source** — Clone the project, run `cd a3-mission-launchpad ** python3 util.py --build --install`.
 
 ---
 

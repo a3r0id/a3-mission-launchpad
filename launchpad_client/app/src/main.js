@@ -6,6 +6,16 @@ import started from 'electron-squirrel-startup';
 import MENU_TEMPLATE from './menu.json';
 import CONFIG from '../config.json';
 
+const { updateElectronApp, UpdateSourceType } = require('update-electron-app')
+updateElectronApp({
+  updateSource: {
+    type: UpdateSourceType.ElectronPublicUpdateService,
+    repo: 'a3r0id/a3-mission-launchpad'
+  },
+  updateInterval: '1 hour',
+  logger: require('electron-log')
+})
+
 if (started) {
   app.quit();
 }

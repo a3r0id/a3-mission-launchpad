@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compatibility wrapper. Use `python util.py --build`."""
+"""Compatibility wrapper. Use `python util.py --publish`."""
 from __future__ import annotations
 
 import subprocess
@@ -9,4 +9,4 @@ from pathlib import Path
 
 if __name__ == "__main__":
     repo = Path(__file__).resolve().parent
-    subprocess.run([sys.executable, "util.py", "--build"], cwd=str(repo), check=True)
+    subprocess.run([sys.executable, "util.py", "--publish"], cwd=str(repo), check=True)

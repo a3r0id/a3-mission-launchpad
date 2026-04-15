@@ -1407,8 +1407,8 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  width: calc(100% - 4px);
-  margin: 1px 2px;
+  width: 100%;
+  margin: 1px 0;
   text-align: left;
   border: none;
   border-radius: 6px;
@@ -2106,6 +2106,55 @@
 /* Logging page */
 .shell-content:has(.logging-page) {
   max-width: 1100px;
+}
+
+.logging-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.logging-source-switch {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  gap: 2px;
+}
+
+.logging-source-btn {
+  border: none;
+  border-radius: calc(var(--radius) - 4px);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.logging-source-btn:hover:not(:disabled):not(.is-active) {
+  color: var(--text-heading);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  .logging-source-btn:hover:not(:disabled):not(.is-active) {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.logging-source-btn.is-active {
+  background: var(--bg-surface);
+  color: var(--text-heading);
+  box-shadow: var(--shadow-sm);
 }
 
 .logging-toolbar {

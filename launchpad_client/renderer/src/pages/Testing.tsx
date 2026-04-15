@@ -230,10 +230,10 @@ export function TestingPage() {
       {!loading && !loadErr ? (
         <>
           <section className="card testing-card">
-            <h2 className="card-title">Launch setup</h2>
-            <p className="card-body" style={{ marginTop: 0 }}>
+            {/* <h2 className="card-title">Launch setup</h2> */}
+            {/* <p className="card-body" style={{ marginTop: 0 }}>
               Pick mission startup options for this session.
-            </p>
+            </p> */}
             <div className="testing-launch-grid">
               <div className="testing-launch-main">
                 <label className="field">

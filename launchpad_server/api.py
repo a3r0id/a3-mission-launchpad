@@ -652,6 +652,44 @@ def _arma3_appdata_path_from_settings() -> tuple[str | None, str | None]:
     return path, None
 
 
+def _arma3_tools_logs_path_from_settings() -> tuple[str | None, str | None]:
+    """Resolve ``{Arma 3 Tools}/Logs`` from settings."""
+    settings = _read_settings()
+    raw = (settings.get("arma3_tools_path") or "").strip()
+    if not raw:
+        return None, "Arma 3 Tools folder is not set in Settings."
+    root = os.path.realpath(os.path.normpath(os.path.expandvars(raw)))
+    if not os.path.isdir(root):
+        return None, f"Arma 3 Tools folder not found: {root}"
+    logs = os.path.join(root, "Logs")
+    try:
+        logs = os.path.realpath(logs)
+    except OSError as e:
+        return None, f"Could not resolve Arma 3 Tools Logs path: {e}"
+    if not os.path.isdir(logs):
+        return None, f"Arma 3 Tools Logs folder not found: {logs}"
+    return logs, None
+
+
+def _rpt_tail_path_allowed(target: str) -> bool:
+    """True if ``target`` is under the configured profile log folder or Arma 3 Tools ``Logs`` folder."""
+    appdata, _ = _arma3_appdata_path_from_settings()
+    if appdata:
+        try:
+            if os.path.commonpath([appdata, target]) == appdata:
+                return True
+        except ValueError:
+            pass
+    tools_logs, _ = _arma3_tools_logs_path_from_settings()
+    if tools_logs:
+        try:
+            if os.path.commonpath([tools_logs, target]) == tools_logs:
+                return True
+        except ValueError:
+            pass
+    return False
+
+
 def _apply_settings_patch(current: dict[str, str], body: dict[str, Any]) -> tuple[dict[str, str] | None, str | None]:
     """
     Merge allowed keys from ``body`` into ``current``.
@@ -1898,16 +1936,12 @@ class A3LaunchpadAPI:
         if not raw:
             return {"_http_status": 400, "error": "Missing query parameter: path"}
 
-        appdata, appdata_err = _arma3_appdata_path_from_settings()
-        if appdata is None:
-            return {"_http_status": 400, "error": appdata_err or "Arma 3 appdata path is invalid."}
-
         target = os.path.realpath(os.path.normpath(os.path.expandvars(raw)))
-        try:
-            if os.path.commonpath([appdata, target]) != appdata:
-                return {"_http_status": 403, "error": "Path is outside Arma 3 appdata."}
-        except ValueError:
-            return {"_http_status": 403, "error": "Path is outside Arma 3 appdata."}
+        if not _rpt_tail_path_allowed(target):
+            return {
+                "_http_status": 403,
+                "error": "Path is outside allowed log folders (profile or Arma 3 Tools Logs).",
+            }
         if not os.path.isfile(target):
             return {"_http_status": 404, "error": "File not found."}
         if not target.lower().endswith(".rpt"):
@@ -2354,17 +2388,26 @@ class A3LaunchpadAPI:
         return force_kill_matching_arma_process(body.get("pid"))
 
     def handle_list_rpt_files(self, handler: BaseHTTPRequestHandler) -> dict[str, Any]:
-        """List .rpt files from the configured Arma 3 appdata folder."""
-        appdata, appdata_err = _arma3_appdata_path_from_settings()
-        if appdata is None:
-            return {"_http_status": 400, "error": appdata_err or "Arma 3 appdata path is invalid."}
+        """
+        List ``.rpt`` files from the profile folder (default) or from ``{Arma 3 Tools}/Logs``.
+
+        Query: ``location=profile`` (default) or ``location=tools``.
+        """
+        loc_raw = (_query_param(handler, "location") or "profile").strip().lower()
+        use_tools = loc_raw == "tools"
+        if use_tools:
+            folder, folder_err = _arma3_tools_logs_path_from_settings()
+        else:
+            folder, folder_err = _arma3_appdata_path_from_settings()
+        if folder is None:
+            return {"_http_status": 400, "error": folder_err or "Log folder is not available."}
 
         rpt_files: list[dict[str, Any]] = []
         try:
-            for name in os.listdir(appdata):
+            for name in os.listdir(folder):
                 if not name.lower().endswith(".rpt"):
                     continue
-                full = os.path.join(appdata, name)
+                full = os.path.join(folder, name)
                 if not os.path.isfile(full):
                     continue
                 rpt_files.append(
@@ -2379,7 +2422,7 @@ class A3LaunchpadAPI:
             return {"_http_status": 500, "error": f"Could not list RPT files: {e}"}
 
         rpt_files.sort(key=lambda x: float(x.get("modified_ts", 0.0)), reverse=True)
-        return {"ok": True, "folder": appdata, "rpt_files": rpt_files}
+        return {"ok": True, "folder": folder, "rpt_files": rpt_files, "location": "tools" if use_tools else "profile"}
 
 A3LaunchpadAPI.route("/api/mission/build", methods=("GET", "POST"))(A3LaunchpadAPI.handle_mission_build_request)
 A3LaunchpadAPI.route("/api/mission/project-tree", methods=("GET",))(A3LaunchpadAPI.handle_mission_project_tree_get)
