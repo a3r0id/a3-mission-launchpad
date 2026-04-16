@@ -18,6 +18,10 @@ Install Launchpad via a cross-platform installer or build from source. For more 
 
 ## Quick start
 
+### Update Settings
+<img width="2168" height="886" alt="image" src="https://github.com/user-attachments/assets/b2606526-8cd5-4533-9b88-76ce1c6a41ff" />
+
+
 ### Create a new mission
 
 1. Start Launchpad (double-click the packaged executable, or `python -m launchpad_server` from the repo if you are developing).
