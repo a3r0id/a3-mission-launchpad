@@ -190,9 +190,9 @@ def bootstrap_mission(
     return warnings
 
 # Generates a default mission.sqm file with the given author and new random seed.
-def generate_mission_sqm(author: str, project_path: str) -> str:
+def generate_mission_sqm(author: str, project_path: str, binarizationWanted: int) -> str:
     with open(os.path.join(project_path, "mission.sqm"), "w") as file:
-        file.write(Constants.SQM_TEMPLATE.replace("$author", author).replace("$randomSeed", str(generate_random_seed())))
+        file.write(Constants.SQM_TEMPLATE.replace("$author", author).replace("$randomSeed", str(generate_random_seed())).replace("$binarizationWanted", str(binarizationWanted)))
     return os.path.join(project_path, "mission.sqm")
 
 # Generates a default Description.ext file with the given author and new random seed.
@@ -358,7 +358,7 @@ def generate(config: dict) -> tuple[str, list[str]]:
 
     sqm_path = os.path.join(project_path, "mission.sqm")
     logging.info("Generating mission.sqm file: %s", sqm_path)
-    generate_mission_sqm(config["author"], project_path)
+    generate_mission_sqm(config["author"], project_path, config.get("binarizationWanted", 0))
 
     desc_path = os.path.join(project_path, "Description.ext")
     logging.info("Generating Description.ext file: %s", desc_path)

@@ -141,7 +141,7 @@ class EditorData
 		aside[]={-0.99290574,0,0.11890386};
 	};
 };
-binarizationWanted=0;
+binarizationWanted=$binarizationWanted;
 sourceName="default";
 class AddonsMetaData
 {

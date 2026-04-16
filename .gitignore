@@ -34,3 +34,5 @@ build/
 # Client things
 .vite/
 launchpad_client/renderer/deps/
+
+.env

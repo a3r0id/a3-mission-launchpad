@@ -20,9 +20,15 @@ class _LaunchpadHTTPServer(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 from urllib.parse import unquote, urlparse
 
-from api import A3LaunchpadAPI, NdjsonStream
-from mission_gen import _launchpad_data_dir
-from sock_server import FramedIpcService
+try:
+    from .api import A3LaunchpadAPI, NdjsonStream
+    from .mission_gen import _launchpad_data_dir
+    from .sock_server import FramedIpcService
+except ImportError:
+    # PyInstaller runs this file as a script; relative imports have no parent package.
+    from api import A3LaunchpadAPI, NdjsonStream
+    from mission_gen import _launchpad_data_dir
+    from sock_server import FramedIpcService
 
 def _configure_logging() -> None:
     """Log to ``launchpad_data/logs/launchpad.log`` and mirror to stderr."""

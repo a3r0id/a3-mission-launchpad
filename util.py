@@ -14,6 +14,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -31,6 +32,8 @@ APP_PACKAGE_JSON = APP_DIR / "package.json"
 APP_MAIN_JS = APP_DIR / "src" / "main.js"
 FORGE_CONFIG = APP_DIR / "forge.config.js"
 VERSION_JSON = REPO / "version.json"
+ROOT_CONFIG_JSON = REPO / "config.json"
+DOTENV_PATH = REPO / ".env"
 
 
 def _die(msg: str) -> None:
@@ -41,19 +44,147 @@ def _die(msg: str) -> None:
 def _run(argv: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
     merged_env = {**os.environ, **(env or {})}
     if sys.platform == "win32":
-        subprocess.run(
+        proc = subprocess.run(
             subprocess.list2cmdline(argv),
             cwd=str(cwd),
             shell=True,
-            check=True,
+            check=False,
             env=merged_env,
         )
     else:
-        subprocess.run(argv, cwd=str(cwd), check=True, env=merged_env)
+        proc = subprocess.run(argv, cwd=str(cwd), check=False, env=merged_env)
+    if proc.returncode != 0:
+        _die(
+            f"Command failed with exit code {proc.returncode}.\n"
+            f"  cwd: {cwd}\n"
+            f"  cmd: {' '.join(argv)}"
+        )
 
 
 def _run_npm(args: list[str], cwd: Path, *, extra_env: dict[str, str] | None = None) -> None:
     _run(["npm", *args], cwd=cwd, env=extra_env)
+
+
+def _load_dotenv(path: Path) -> None:
+    """Populate ``os.environ`` from a ``.env`` file (no extra deps). Existing env wins."""
+    if not path.is_file():
+        return
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if not key:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        if key in os.environ:
+            continue
+        os.environ[key] = value
+
+
+def _read_json_optional(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        _die(f"Invalid JSON in {path}: {exc}")
+    if not isinstance(payload, dict):
+        _die(f"Expected a JSON object in {path}")
+    return payload
+
+
+def _resolve_temp_directory(raw: str | None) -> Path | None:
+    if raw is None:
+        return None
+    candidate = str(raw).strip()
+    if not candidate:
+        return None
+    # Support both shell-style vars ($TMPDIR) and Windows-style placeholders (%temp%).
+    candidate = os.path.expanduser(os.path.expandvars(candidate))
+    temp_dir = tempfile.gettempdir()
+    for token in ("%TEMP%", "%temp%", "%TMP%", "%tmp%"):
+        candidate = candidate.replace(token, temp_dir)
+    return Path(candidate).resolve()
+
+
+def _resolve_temp_cleanup_mode(raw: str | None) -> str:
+    if raw is None:
+        return "auto"
+    mode = str(raw).strip().lower()
+    if not mode:
+        return "auto"
+    if mode not in {"auto", "always"}:
+        _die(
+            "Invalid config.json value for `temp_directory_cleanup`.\n"
+            "Expected one of: auto, always"
+        )
+    return mode
+
+
+def _publish_copy_ignore(_src: str, names: list[str]) -> set[str]:
+    ignored = {
+        ".git",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        "node_modules",
+        "build",
+        "out",
+        "A3LaunchPad",
+        "launchpad_data",
+    }
+    return {name for name in names if name in ignored}
+
+
+def _run_publish_in_temp_workspace(temp_root: Path, cleanup_mode: str) -> None:
+    dist_root = temp_root / "dist"
+    workspace = dist_root / f"a3-mission-launchpad-publish-{uuid.uuid4().hex[:12]}"
+    dist_existed_before = dist_root.exists()
+    dist_root.mkdir(parents=True, exist_ok=True)
+    print(f"Creating temporary publish workspace: {workspace}")
+    shutil.copytree(REPO, workspace, ignore=_publish_copy_ignore)
+    env = {
+        **os.environ,
+        "LAUNCHPAD_TEMP_PUBLISH_ACTIVE": "1",
+    }
+    try:
+        proc = subprocess.run(
+            [sys.executable, "util.py", "--publish"],
+            cwd=str(workspace),
+            check=False,
+            env=env,
+        )
+        if proc.returncode != 0:
+            _die(
+                "Publish failed in temporary workspace.\n"
+                "See the error output above for the root cause."
+            )
+    finally:
+        _rmtree_retry(workspace, fatal=False)
+        should_remove_dist = cleanup_mode == "always" or (cleanup_mode == "auto" and not dist_existed_before)
+        if should_remove_dist:
+            if cleanup_mode == "always":
+                _rmtree_retry(dist_root, fatal=False)
+                return
+            try:
+                dist_root.rmdir()
+            except OSError:
+                # Keep folder if another process wrote to it.
+                pass
 
 
 def _rmtree_retry(
@@ -237,6 +368,11 @@ def run_build() -> None:
     ext_dir = mod_root / "extension"
     ext_build = ext_dir / "build"
 
+    # Temp publish workspaces omit node_modules; install before tsc/vite.
+    if not (renderer / "node_modules").is_dir():
+        print("Installing renderer dependencies (npm ci)...")
+        _run_npm(["ci"], renderer)
+
     _run_npm(["run", "build"], renderer)
 
     configure = ["cmake", "-B", str(ext_build), "-S", str(ext_dir)]
@@ -277,20 +413,23 @@ def _read_json(path: Path) -> dict:
         _die(f"Invalid JSON in {path}: {exc}")
 
 
-def _validate_version_alignment() -> str:
+def _sync_publish_versions() -> str:
     root_version = str(_read_json(VERSION_JSON).get("version", "")).strip()
-    app_version = str(_read_json(APP_PACKAGE_JSON).get("version", "")).strip()
+    app_payload = _read_json(APP_PACKAGE_JSON)
+    app_version = str(app_payload.get("version", "")).strip()
     if not root_version:
         _die(f"`version` is missing in {VERSION_JSON}")
     if not app_version:
         _die(f"`version` is missing in {APP_PACKAGE_JSON}")
     if root_version != app_version:
-        _die(
-            "Version mismatch detected:\n"
+        app_payload["version"] = root_version
+        APP_PACKAGE_JSON.write_text(json.dumps(app_payload, indent=2) + "\n", encoding="utf-8")
+        print(
+            "Version mismatch detected; synchronized app package version:\n"
             f"  version.json: {root_version}\n"
-            f"  launchpad_client/app/package.json: {app_version}"
+            f"  launchpad_client/app/package.json: {root_version}"
         )
-    return f"v{app_version}"
+    return f"v{root_version}"
 
 
 def _validate_staged_layout() -> None:
@@ -328,6 +467,7 @@ def _validate_update_config() -> None:
 
 
 def _resolve_github_token() -> str:
+    _load_dotenv(DOTENV_PATH)
     token = (
         os.environ.get("GITHUB_TOKEN")
         or os.environ.get("GH_TOKEN")
@@ -335,7 +475,8 @@ def _resolve_github_token() -> str:
     )
     if not token:
         _die(
-            "No GitHub token found. Set one of: GITHUB_TOKEN, GH_TOKEN, ELECTRON_FORGE_GITHUB_TOKEN"
+            "No GitHub token found. Add GITHUB_TOKEN to .env at the repo root, or set one of: "
+            "GITHUB_TOKEN, GH_TOKEN, ELECTRON_FORGE_GITHUB_TOKEN in the environment."
         )
     return token
 
@@ -355,7 +496,17 @@ def _publish(github_token: str) -> None:
 
 
 def run_publish() -> None:
-    expected_tag = _validate_version_alignment()
+    _load_dotenv(DOTENV_PATH)
+    expected_tag = _sync_publish_versions()
+
+    if os.environ.get("LAUNCHPAD_TEMP_PUBLISH_ACTIVE") != "1":
+        root_cfg = _read_json_optional(ROOT_CONFIG_JSON)
+        temp_root = _resolve_temp_directory(root_cfg.get("temp_directory"))
+        cleanup_mode = _resolve_temp_cleanup_mode(root_cfg.get("temp_directory_cleanup"))
+        if temp_root is not None:
+            _run_publish_in_temp_workspace(temp_root, cleanup_mode)
+            return
+
     print(f"Release tag expected for updater compatibility: {expected_tag}")
     run_build()
     _validate_staged_layout()

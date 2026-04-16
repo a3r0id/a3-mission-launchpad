@@ -689,7 +689,6 @@ def _rpt_tail_path_allowed(target: str) -> bool:
             pass
     return False
 
-
 def _apply_settings_patch(current: dict[str, str], body: dict[str, Any]) -> tuple[dict[str, str] | None, str | None]:
     """
     Merge allowed keys from ``body`` into ``current``.
