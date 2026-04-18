@@ -7,7 +7,6 @@ export type ElectronIpcRenderer = {
 /** Returns the Electron IPC bridge when running inside the desktop shell; otherwise null. */
 export function getElectronIpc(): ElectronIpcRenderer | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require('electron').ipcRenderer as ElectronIpcRenderer
   } catch {
     return null

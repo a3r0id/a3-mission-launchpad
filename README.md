@@ -1,10 +1,10 @@
-# A3 Mission Launchpad
+# A3 Launchpad
 
 [![Extension CI (main)](https://github.com/a3r0id/a3-mission-launchpad/actions/workflows/extension-ci.yml/badge.svg?branch=main)](https://github.com/a3r0id/a3-mission-launchpad/actions/workflows/extension-ci.yml?query=branch%3Amain)
 
 ![Launchpad](launchpad.png)
 
-**Launchpad** is a robust suite of tools to aid Arma 3 mission makers and eventually modders. Launchpad features project organization/resource tracking, scripting, and soft-profiling - both in-game and out. There is a lot of tooling out there for mod makers; This project focuses on **mission makers**, at least to begin with. The main purpose of Launchpad is to fill the gap that Arma 3 Tools and 3Den lack, that Enfusion showed us. 
+**Launchpad** is a robust suite of tools to aid Arma 3 mission makers and eventually modders. Launchpad features project organization/resource tracking, scripting, and soft-profiling - both in-game and out. There's a lot of tooling out there for mod makers; this project focuses on **mission makers**, at least to begin with. The main purpose of Launchpad is to fill the gap that Arma 3 Tools and 3DEN lack in terms of workflow quality, project visibility, and day-to-day mission iteration speed.
 
 ---
 
@@ -12,7 +12,7 @@
 
 Install Launchpad via a cross-platform installer or build from source. For more info see [Installation](docs/INSTALLATION.md).
 - **Download a release** — Install a release from the [releases](/releases) page.
-- **Build from source** — Clone the project, then run `python util.py --build` from the repo root.
+- **Build from source** — Clone the project, build the renderer, then package Electron from `launchpad_client/app`.
 
 ---
 
@@ -20,7 +20,7 @@ Install Launchpad via a cross-platform installer or build from source. For more 
 
 ### Create a new mission
 
-1. Start Launchpad (double-click the packaged executable, or `python -m launchpad_server` from the repo if you are developing).
+1. Start Launchpad (double-click the packaged executable, or run Electron from `launchpad_client/app` while developing).
 2. In the main menu, choose **Create New Scenario**.
 3. Fill in the form and confirm.
 4. Your mission shows up under **Managed Missions**.

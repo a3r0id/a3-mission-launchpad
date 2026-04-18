@@ -12,6 +12,7 @@ import { ArmaProcessMonitor } from '../components/ArmaProcessMonitor'
 const LS_MISSION = 'launchpad:testing:selectedMissionId'
 const LS_EXTRA = 'launchpad:testing:extraArgs'
 const LS_DEBUG = 'launchpad:testing:debugMode'
+const LS_USE_EXTENSION = 'launchpad:testing:useExtension'
 const AUTOTEST_POLL_MS = 2000
 
 function fullMissionName(s: ManagedScenario) {
@@ -26,6 +27,7 @@ export function TestingPage() {
   const [selectedMissionId, setSelectedMissionId] = useState('')
   const [extraArgs, setExtraArgs] = useState(() => sessionStorage.getItem(LS_EXTRA) ?? '')
   const [debugMode, setDebugMode] = useState(() => sessionStorage.getItem(LS_DEBUG) === '1')
+  const [useExtension, setUseExtension] = useState(() => sessionStorage.getItem(LS_USE_EXTENSION) === '1')
   const [autotestLabel, setAutotestLabel] = useState('')
   const [autotestIterations, setAutotestIterations] = useState('')
   const [autotestMaxDurationSec, setAutotestMaxDurationSec] = useState('')
@@ -74,6 +76,10 @@ export function TestingPage() {
   useEffect(() => {
     sessionStorage.setItem(LS_DEBUG, debugMode ? '1' : '0')
   }, [debugMode])
+
+  useEffect(() => {
+    sessionStorage.setItem(LS_USE_EXTENSION, useExtension ? '1' : '0')
+  }, [useExtension])
 
   useEffect(() => {
     const id = selectedMissionId.trim()
@@ -180,6 +186,7 @@ export function TestingPage() {
       const res = await postTestingLaunch({
         managed_scenario_id: mid,
         extra_args: extraWithDebug || undefined,
+        use_companion_extension: useExtension,
         autotest: useAutotest,
         ...(specToSend !== undefined ? { autotest_spec: specToSend } : {}),
       })
@@ -212,12 +219,12 @@ export function TestingPage() {
 
   return (
     <div className="page-stack testing-page">
-      <header className="page-header">
+      {/* <header className="page-header">
         <h1 className="page-title">Testing</h1>
         <p className="page-lead">
           Benchmark and audit your mission.
         </p>
-      </header>
+      </header> */}
 
       {loading ? (
         <p className="card-body">Loading…</p>
@@ -290,8 +297,8 @@ export function TestingPage() {
                 <label className="testing-inline-toggle">
                   <input
                     type="checkbox"
-                    checked={debugMode}
-                    // onChange={(e) => setUseExtension(e.target.checked)}
+                    checked={useExtension}
+                    onChange={(e) => setUseExtension(e.target.checked)}
                     disabled={busy}
                   />
                   <span>

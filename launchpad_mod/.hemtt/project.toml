@@ -1,6 +1,7 @@
-name = "A3 Mission Launchpad API"
+name = "A3_LAUNCHPAD_COMPANION_MOD"
+author = "LaunchpadDev"
+prefix = "a3_launchpad_ext"
 mainprefix = "z"
-prefix = "a3_launchpad_ext_core"
 
 [version]
 major = 0

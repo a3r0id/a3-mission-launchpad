@@ -3,12 +3,10 @@ const path = require('node:path');
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 
-/** Packaged layout under repo ``A3LaunchPad/`` (Python onedir, static UI, same parent as ``bin``). */
+/** Packaged layout under repo ``A3LaunchPad/`` (static UI payload). */
 const a3LaunchPad = path.resolve(__dirname, '..', '..', 'A3LaunchPad');
-const launchpadFrozenBin = path.join(a3LaunchPad, 'bin');
 const launchpadWebDist = path.join(a3LaunchPad, 'web_dist');
 const extraResource = [];
-if (fs.existsSync(launchpadFrozenBin)) extraResource.push(launchpadFrozenBin);
 if (fs.existsSync(launchpadWebDist)) extraResource.push(launchpadWebDist);
 
 /** Set by ``util.py`` to a fresh ``build/electron-forge-*`` path so Windows never has to delete a locked ``app/out`` tree. */
@@ -104,12 +102,12 @@ module.exports = {
       config: {
         build: [
           {
-            entry: 'src/main.js',
+            entry: 'src/index.ts',
             config: 'vite.main.config.mjs',
             target: 'main',
           },
           {
-            entry: 'src/preload.js',
+            entry: 'src/preload.ts',
             config: 'vite.preload.config.mjs',
             target: 'preload',
           },
@@ -141,7 +139,7 @@ module.exports = {
           name: 'a3-mission-launchpad',
         },
         prerelease: false,
-        /** Must match ``releaseTag`` derived in ``main.js`` (default ``v`` + semver from ``version.json``). */
+        /** Must match ``releaseTag`` derived in ``index.ts`` (default ``v`` + semver from ``version.json``). */
         tagPrefix: 'v',
       },
     },

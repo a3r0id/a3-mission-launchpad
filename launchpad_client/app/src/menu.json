@@ -28,6 +28,8 @@
     {
         "label": "Developer",
         "submenu": [
+            { "label": "Open data directory", "id": "open-data-directory" },
+            { "type": "separator" },
             { "role" : "reload" },
             { "role": "forcereload" },
             { "role" : "toggledevtools" }

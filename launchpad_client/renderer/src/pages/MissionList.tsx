@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faGithub } from '@fortawesome/free-brands-svg-icons'
-import { faEdit, faArchive, faTrash, faPlay, faList } from '@fortawesome/free-solid-svg-icons'
+import { faEdit, faArchive, faTrash, faPlay, faList, faEllipsisVertical } from '@fortawesome/free-solid-svg-icons'
 import {
   deleteManagedScenario,
   fetchManagedScenarios,
   fetchManagedScenarioMods,
-  gameTypeFromExtParams,
   launchManagedScenario,
   saveManagedScenarioMods,
   type ManagedScenario,
   type MissionLaunchMod,
 } from '../api/launchpad'
+import { extractGameTypeFromDescriptionExt, missionDescriptionExtPath } from '../mission/descriptionExt'
 import { MissionEditModal } from '../components/MissionEditModal'
+import { ScriptEditorModal } from '../components/IntegratedScriptEditor'
 import { MissionGitHubModal } from '../components/MissionGitHubModal'
 import Util, { PboOutputExistsError } from '../Util'
 import { VSCodeIcon } from '../components/CustomIcons/VSCodeIcon'
+import { MissionBuildPage } from './MissionBuildPage'
 
 function fullMissionName(s: ManagedScenario) {
   const base = (s.name ?? '').trim()
@@ -81,6 +83,49 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
   const [modsBusy, setModsBusy] = useState(false)
   const [modsErr, setModsErr] = useState<string | null>(null)
   const [modsInfo, setModsInfo] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [scriptEditor, setScriptEditor] = useState<{ root: string; title: string } | null>(null)
+  const [missionMenuOpenId, setMissionMenuOpenId] = useState<string | null>(null)
+  const [scenarioGameTypes, setScenarioGameTypes] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadGameTypes() {
+      const next: Record<string, string> = {}
+      await Promise.all(
+        scenarios.map(async (s) => {
+          const root = s.project_path?.trim()
+          if (!root) {
+            next[s.id] = ''
+            return
+          }
+          try {
+            const text = await Util.getFileContents(missionDescriptionExtPath(root))
+            if (!cancelled) next[s.id] = extractGameTypeFromDescriptionExt(text)
+          } catch {
+            if (!cancelled) next[s.id] = ''
+          }
+        }),
+      )
+      if (!cancelled) setScenarioGameTypes(next)
+    }
+    void loadGameTypes()
+    return () => {
+      cancelled = true
+    }
+  }, [scenarios])
+
+  useEffect(() => {
+    if (!missionMenuOpenId) return
+    const onDocMouseDown = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null
+      if (!el) return
+      if (el.closest(`[data-mission-row-menu="${missionMenuOpenId}"]`)) return
+      setMissionMenuOpenId(null)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [missionMenuOpenId])
 
   function openPboModal(s: ManagedScenario) {
     setPboMission(s)
@@ -295,6 +340,54 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
 
   return (
     <div className="page-stack">
+      <ScriptEditorModal
+        open={scriptEditor !== null}
+        projectRoot={scriptEditor?.root ?? ''}
+        contextTitle={scriptEditor?.title ?? ''}
+        environment="mission"
+        onClose={() => setScriptEditor(null)}
+      />
+      {createOpen ? (
+        <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="new-mission-title">
+          <button
+            type="button"
+            className="modal-backdrop"
+            aria-label="Close dialog"
+            onClick={() => setCreateOpen(false)}
+          />
+          <div className="modal-dialog modal-dialog-wide mission-edit-dialog">
+            <header className="mission-edit-header">
+              <div className="mission-edit-header-main">
+                <p className="mission-edit-eyebrow">Create mission</p>
+                <h2 id="new-mission-title" className="mission-edit-title">
+                  New Mission
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="mission-edit-close"
+                onClick={() => setCreateOpen(false)}
+                aria-label="Close"
+              >
+                <span aria-hidden>×</span>
+              </button>
+            </header>
+            <div className="mission-edit-surface">
+              <MissionBuildPage
+                embedded
+                onGoSettings={onOpenSettings}
+                onBuilt={(res) => {
+                  setCreateOpen(false)
+                  setSaveInfo(
+                    `Mission created at ${res.mission_path ?? 'project folder'} (${res.mission_id ?? 'managed'}).`,
+                  )
+                  void load()
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
       {editMission ? (
         <MissionEditModal
           key={editMission.id}
@@ -645,9 +738,9 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
         </div>
       ) : null}
 
-      <header className="page-header">
-        <h1 className="page-title">Managed Missions</h1>
-      </header>
+      {/* <header className="page-header">
+        <h1 className="page-title">Missions</h1>
+      </header> */}
 
       {loadError && (
         <p className="form-banner form-banner-error" role="alert">
@@ -663,14 +756,23 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
       <div className="card">
         <div className="mission-list-card-head">
           <h2 className="card-title">All missions</h2>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => void load()}
-            disabled={loading}
-          >
-            Refresh
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setCreateOpen(true)}
+            >
+              + New Mission
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => void load()}
+              disabled={loading}
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         {loading && <p className="card-body">Loading…</p>}
@@ -690,7 +792,7 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
                       <span>By {scenario.author}</span>
                       <span className="mission-list-pill">{scenario.mission_type?.toUpperCase() || '—'}</span>
                       <span className="mission-list-pill mission-list-pill-accent">
-                        {gameTypeFromExtParams(scenario.ext_params).toUpperCase() || '—'}
+                        {(scenarioGameTypes[scenario.id] ?? '').toUpperCase() || '—'}
                       </span>
                       {hasSymlinkPaths(scenario) ? (
                         <span className="mission-list-pill mission-list-pill-on">Symlink</span>
@@ -705,6 +807,22 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
                     </div>
                     {scenario.description ? (
                       <p className="mission-list-desc">{scenario.description}</p>
+                    ) : null}
+                    {scenario.project_path ? (
+                      <div className="mission-list-script-row">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          disabled={loading}
+                          onClick={() => {
+                            const root = scenario.project_path?.trim()
+                            if (!root) return
+                            setScriptEditor({ root, title: fullMissionName(scenario) })
+                          }}
+                        >
+                          Open in Script Editor
+                        </button>
+                      </div>
                     ) : null}
                   </div>
                   <button type="button" className="btn btn-ghost" onClick={() => setEditMission(scenario)} title="Edit mission" disabled={loading}>
@@ -768,6 +886,49 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
                   >
                     <FontAwesomeIcon icon={faGithub} />
                   </button>
+                  <div className="mission-list-menu-anchor" data-mission-row-menu={scenario.id}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      aria-haspopup="menu"
+                      aria-expanded={missionMenuOpenId === scenario.id}
+                      aria-controls={`mission-row-menu-${scenario.id}`}
+                      id={`mission-row-menu-trigger-${scenario.id}`}
+                      disabled={loading}
+                      title="More actions"
+                      aria-label="More actions"
+                      onClick={() =>
+                        setMissionMenuOpenId((cur) => (cur === scenario.id ? null : scenario.id))
+                      }
+                    >
+                      <FontAwesomeIcon icon={faEllipsisVertical} />
+                    </button>
+                    {missionMenuOpenId === scenario.id ? (
+                      <ul
+                        className="mission-list-dropdown"
+                        id={`mission-row-menu-${scenario.id}`}
+                        role="menu"
+                        aria-labelledby={`mission-row-menu-trigger-${scenario.id}`}
+                      >
+                        <li role="none">
+                          <button
+                            type="button"
+                            className="mission-list-dropdown-item"
+                            role="menuitem"
+                            disabled={!scenario.project_path?.trim()}
+                            onClick={() => {
+                              const root = scenario.project_path?.trim()
+                              if (!root) return
+                              setScriptEditor({ root, title: fullMissionName(scenario) })
+                              setMissionMenuOpenId(null)
+                            }}
+                          >
+                            Open in Script Editor
+                          </button>
+                        </li>
+                      </ul>
+                    ) : null}
+                  </div>
                 </div>
               </li>
             ))}

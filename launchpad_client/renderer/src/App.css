@@ -1,3 +1,36 @@
+/* Full-window splash until assets are ready (see SplashScreen.tsx) */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-app);
+  transition: opacity 0.35s ease;
+  opacity: 1;
+}
+
+.splash-screen--hide {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-screen__img {
+  max-width: min(88vw, 720px);
+  max-height: min(70vh, 560px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.14));
+}
+
+@media (prefers-color-scheme: dark) {
+  .splash-screen__img {
+    filter: drop-shadow(0 12px 36px rgba(0, 0, 0, 0.45));
+  }
+}
+
 .app-shell {
   flex: 1;
   min-height: 0;
@@ -121,6 +154,25 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+  isolation: isolate;
+}
+
+/* Watermark: centered in the main panel only, not behind the sidebar */
+.shell-main::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  left: 21.875%;
+  top: 21.875%;
+  width: 56.25%;
+  height: 56.25%;
+  background-image: url('/arma_iii_transparent.png');
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.38;
+  pointer-events: none;
 }
 
 .shell-content {
@@ -130,6 +182,8 @@
   overflow-y: auto;
   padding: 28px 36px 40px;
   max-width: 100% !important;
+  position: relative;
+  z-index: 1;
 }
 
 @media (max-width: 840px) {
@@ -171,6 +225,16 @@
     padding: 20px 18px 32px;
     flex: 1;
     min-height: 0;
+  }
+
+  .shell-main::before {
+    inset: 0;
+    width: min(58.5vw, 225px);
+    height: min(30vh, 180px);
+    max-width: calc(100% - 32px);
+    max-height: calc(100% - 32px);
+    margin: auto;
+    opacity: 0.34;
   }
 }
 
@@ -473,6 +537,50 @@
   max-width: 70ch;
 }
 
+.mission-list-menu-anchor {
+  position: relative;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.mission-list-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+  margin: 0;
+  padding: 6px 0;
+  min-width: 200px;
+  list-style: none;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.mission-list-dropdown-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+.mission-list-dropdown-item:hover:not(:disabled) {
+  background: var(--bg-subtle);
+}
+
+.mission-list-dropdown-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .mission-list-edit {
   margin-top: 4px;
   padding: 14px 14px 12px;
@@ -594,6 +702,119 @@
   max-height: min(88vh, 920px);
 }
 
+.script-editor-modal-dialog {
+  position: relative;
+  width: min(1120px, 100%);
+  max-width: calc(100vw - 48px);
+  max-height: min(92vh, 960px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Floating script editor: drag + resize (see IntegratedScriptEditor.tsx) */
+.script-editor-modal-root {
+  display: block;
+  padding: 0;
+}
+
+.script-editor-modal-dialog--floating {
+  z-index: 1;
+  margin: 0;
+  max-width: none;
+  max-height: none;
+  box-sizing: border-box;
+}
+
+.script-editor-modal-drag-handle {
+  cursor: grab;
+  user-select: none;
+}
+
+.script-editor-modal-dialog--floating .script-editor-modal-drag-handle:active {
+  cursor: grabbing;
+}
+
+.script-editor-resize {
+  position: absolute;
+  z-index: 4;
+  display: block;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+
+.script-editor-resize:hover {
+  background: rgba(9, 105, 218, 0.06);
+}
+
+.script-editor-resize-e {
+  top: 64px;
+  right: 0;
+  bottom: 18px;
+  width: 10px;
+  cursor: ew-resize;
+}
+
+.script-editor-resize-s {
+  left: 10px;
+  right: 18px;
+  bottom: 0;
+  height: 10px;
+  cursor: ns-resize;
+}
+
+.script-editor-resize-se {
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  border-bottom-right-radius: var(--radius-lg);
+}
+
+.script-editor-modal-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  margin-top: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  margin-bottom: 0 !important;
+  padding: 0 !important;
+  border: none;
+  border-radius: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.script-editor-modal-dialog--floating .script-editor-modal-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.mission-list-script-row {
+  margin-top: 10px;
+}
+
+.mod-project-script-row {
+  margin-top: 8px;
+}
+
+.integrated-script-editor {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 /* —— Mission edit modal (dedicated chrome) —— */
 .mission-edit-dialog {
   padding: 0;
@@ -601,6 +822,7 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-md), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  padding-bottom: 16px;
   gap: 0;
 }
 
@@ -917,20 +1139,47 @@
   font-size: 12px;
 }
 
+.file-folder-input {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+}
+
+.file-folder-input__field {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-folder-input__browse {
+  flex-shrink: 0;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+}
+
 /* Resource browser */
 .mission-resource-browser {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
 }
 
 .mission-resource-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 34%) minmax(0, 1fr);
+  grid-template-columns: minmax(200px, 34%) minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .mission-resource-layout > * {
@@ -949,6 +1198,8 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   border-right: 1px solid var(--border);
   background: var(--bg-subtle);
 }
@@ -991,7 +1242,8 @@
 .mission-resource-tree-wrap {
   flex: 1;
   min-height: 0;
-  overflow-x: hidden;
+  min-width: 0;
+  overflow-x: auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 6px 4px 10px;
@@ -1002,6 +1254,8 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   background: var(--bg-surface);
 }
 
@@ -1049,8 +1303,11 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   padding: 12px 16px 16px;
   gap: 10px;
+  overflow: hidden;
 }
 
 .mission-resource-file-toolbar {
@@ -1103,20 +1360,190 @@
   box-shadow: var(--focus);
 }
 
-.mission-resource-monaco {
+/* Wrapper around Monaco (+ optional problems). Must flex-grow so ``height: 100%`` on the editor resolves. */
+.mission-resource-editor-editor-stack {
   flex: 1;
-  min-height: 280px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.mission-resource-editor-editor-stack > .mission-resource-monaco {
+  flex: 1 1 0;
+  min-height: 200px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* @monaco-editor/react root fills the shaded frame */
+.mission-resource-editor-editor-stack > .mission-resource-monaco > div {
+  flex: 1;
+  min-height: 0;
+}
+
+.mission-resource-monaco {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   overflow: hidden;
   background: var(--bg-subtle);
+  resize: none;
+}
+
+.mission-resource-monaco .monaco-editor,
+.mission-resource-monaco .monaco-editor .overflow-guard {
+  max-width: 100%;
 }
 
 .mission-resource-monaco:focus-within {
   border-color: var(--accent);
   box-shadow: var(--focus);
+}
+
+.mission-resource-problems {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(220px, 32vh);
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  background: var(--bg-subtle);
+  border-radius: 0 0 var(--radius) var(--radius);
+  overflow: hidden;
+}
+
+.mission-resource-problems-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.mission-resource-problems-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mission-resource-problems-status {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.mission-resource-problems-banner {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-heading);
+  background: rgba(191, 42, 42, 0.08);
+  border-bottom: 1px solid var(--border);
+}
+
+.mission-resource-problems-empty {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mission-resource-problems-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.mission-resource-problems-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.mission-resource-problems-item:last-child {
+  border-bottom: none;
+}
+
+.mission-resource-problems-row {
+  display: grid;
+  grid-template-columns: minmax(64px, 76px) minmax(0, 1.1fr) minmax(0, 2fr);
+  gap: 8px 10px;
+  width: 100%;
+  padding: 8px 10px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-body);
+}
+
+.mission-resource-problems-row:hover:not(:disabled) {
+  background: var(--bg-surface);
+}
+
+.mission-resource-problems-row:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.mission-resource-problems-sev {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  align-self: start;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.mission-resource-problems-sev-error {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.35);
+  background: rgba(180, 35, 24, 0.08);
+}
+
+.mission-resource-problems-sev-warning {
+  color: #8a5b00;
+  border-color: rgba(191, 135, 0, 0.35);
+  background: rgba(191, 135, 0, 0.1);
+}
+
+.mission-resource-problems-sev-info {
+  color: var(--text-muted);
+  border-color: var(--border);
+  background: var(--bg-app);
+}
+
+.mission-resource-problems-meta {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.mission-resource-problems-msg {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-heading);
+}
+
+@media (max-width: 720px) {
+  .mission-resource-problems-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }
 
 /* GitHub (local git) panel */

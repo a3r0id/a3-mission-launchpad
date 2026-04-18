@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Editor from '@monaco-editor/react'
+import type { OnMount } from '@monaco-editor/react'
 import { fetchMissionProjectTree, type ProjectTreeNode } from '../api/launchpad'
 import { useAppPreferences } from '../context/AppPreferencesContext'
 import {
@@ -7,7 +8,7 @@ import {
   missionMonacoTheme,
   missionResourceLanguage,
 } from '../missionMonacoSetup'
-import Util from '../Util'
+import Util, { type HemttDiagnostic } from '../Util'
 
 function joinProjectPath(root: string, relPosix: string): string {
   const base = root.replace(/[/\\]+$/, '')
@@ -17,11 +18,80 @@ function joinProjectPath(root: string, relPosix: string): string {
   return win ? [base, ...parts].join('\\') : [base, ...parts].join('/')
 }
 
+function normalizePathKey(p: string): string {
+  return p.replace(/\\/g, '/').toLowerCase()
+}
+
+/** Project-relative path (posix) from absolute ``filePath``, or null if outside root. */
+function relFromProjectRoot(projectRoot: string, filePath: string): string | null {
+  const root = normalizePathKey(projectRoot.replace(/[/\\]+$/, ''))
+  const file = normalizePathKey(filePath)
+  if (!file.startsWith(root)) return null
+  const tail = file.slice(root.length).replace(/^[/\\]+/, '')
+  return tail ? tail.replace(/\\/g, '/') : null
+}
+
+function applyHemttMarkers(
+  shell: { editor: Parameters<OnMount>[0]; monaco: Parameters<OnMount>[1] } | null,
+  projectRoot: string,
+  selectedRel: string | null,
+  diagnostics: HemttDiagnostic[],
+) {
+  if (!shell?.editor.getModel() || !selectedRel) return
+  const model = shell.editor.getModel()!
+  const activeAbs = normalizePathKey(joinProjectPath(projectRoot, selectedRel))
+  const S = shell.monaco.MarkerSeverity
+  const markers = diagnostics
+    .filter(
+      (d) =>
+        d.file &&
+        d.line != null &&
+        normalizePathKey(d.file) === activeAbs,
+    )
+    .map((d) => ({
+      startLineNumber: d.line!,
+      startColumn: Math.max(1, d.column ?? 1),
+      endLineNumber: d.line!,
+      endColumn: Math.max(1, (d.column ?? 1) + 1),
+      message: d.message,
+      severity:
+        d.severity === 'warning'
+          ? S.Warning
+          : d.severity === 'help' || d.severity === 'info'
+            ? S.Info
+            : S.Error,
+    }))
+  shell.monaco.editor.setModelMarkers(model, 'hemtt', markers)
+}
+
+export type ScriptEditorEnvironment = 'mission' | 'mod'
+
 function formatSize(n: number | null | undefined): string {
   if (n == null) return ''
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** Depth-first: first file node in the same order as the tree UI. */
+function firstFileRelDepthFirst(node: ProjectTreeNode): string | null {
+  if (node.kind === 'file') return node.relPath || null
+  for (const ch of node.children ?? []) {
+    const hit = firstFileRelDepthFirst(ch)
+    if (hit) return hit
+  }
+  return null
+}
+
+/** Directory ``relPath`` values that must be expanded to reveal a file at ``fileRel``. */
+function ancestorDirRelPathsForFile(fileRel: string): string[] {
+  const parts = fileRel.split('/').filter(Boolean)
+  if (parts.length <= 1) return ['']
+  const out: string[] = ['']
+  for (let i = 0; i < parts.length - 1; i++) {
+    out.push(parts.slice(0, i + 1).join('/'))
+  }
+  return out
 }
 
 function TreeBranch({
@@ -94,9 +164,11 @@ function TreeBranch({
 type Props = {
   projectRoot: string
   disabled?: boolean
+  /** ``mod`` enables HEMTT project checks and a problems list; ``mission`` keeps editor-only behaviour. */
+  environment?: ScriptEditorEnvironment
 }
 
-export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
+export function MissionResourceBrowser({ projectRoot, disabled, environment = 'mission' }: Props) {
   const { useSyntaxHighlighting } = useAppPreferences()
   const [tree, setTree] = useState<ProjectTreeNode | null>(null)
   const [truncated, setTruncated] = useState(false)
@@ -110,6 +182,14 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
   const [dirty, setDirty] = useState(false)
   const [savingFile, setSavingFile] = useState(false)
   const [monacoReady, setMonacoReady] = useState(false)
+  const [lintDiagnostics, setLintDiagnostics] = useState<HemttDiagnostic[]>([])
+  const [lintRunning, setLintRunning] = useState(false)
+  const [lintToolError, setLintToolError] = useState<string | null>(null)
+  const monacoShellRef = useRef<{ editor: Parameters<OnMount>[0]; monaco: Parameters<OnMount>[1] } | null>(null)
+  const lintDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lintSeqRef = useRef(0)
+  const selectedRelRef = useRef<string | null>(null)
+  const initialTreeSelectionDoneRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -122,6 +202,7 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
   }, [])
 
   const loadTree = useCallback(async () => {
+    initialTreeSelectionDoneRef.current = false
     setTreeLoading(true)
     setTreeErr(null)
     setTree(null)
@@ -144,6 +225,8 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
     void loadTree()
   }, [loadTree])
 
+  selectedRelRef.current = selectedRel
+
   const toggle = useCallback((rel: string) => {
     setExpanded((prev) => {
       const next = new Set(prev)
@@ -158,6 +241,17 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
 
   const openFile = useCallback(
     async (rel: string) => {
+      if (rel === selectedRelRef.current) {
+        return
+      }
+      lintSeqRef.current += 1
+      const shell = monacoShellRef.current
+      const m = shell?.editor.getModel()
+      if (shell && m) {
+        shell.monaco.editor.setModelMarkers(m, 'hemtt', [])
+      }
+      setLintDiagnostics([])
+      setLintToolError(null)
       setSelectedRel(rel)
       setFileErr(null)
       setFileLoading(true)
@@ -175,6 +269,78 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
     },
     [projectRoot],
   )
+
+  const onMonacoMount: OnMount = useCallback((editor, monaco) => {
+    monacoShellRef.current = { editor, monaco }
+  }, [])
+
+  useEffect(() => {
+    if (environment !== 'mod' || !selectedRel || fileLoading || disabled) return
+    if (lintDebounceRef.current) clearTimeout(lintDebounceRef.current)
+    lintDebounceRef.current = setTimeout(() => {
+      lintDebounceRef.current = null
+      const seq = ++lintSeqRef.current
+      void (async () => {
+        setLintRunning(true)
+        setLintToolError(null)
+        try {
+          if (dirty) {
+            const abs = joinProjectPath(projectRoot, selectedRel)
+            await Util.setFileContents(abs, fileContent)
+            setDirty(false)
+          }
+          const res = await Util.lintModProjectHemtt(projectRoot)
+          if (seq !== lintSeqRef.current) return
+          if (res.code === 'hemtt_missing' || res.code === 'hemtt_failed') {
+            setLintDiagnostics([])
+            setLintToolError(res.error ?? 'Could not run project check.')
+            applyHemttMarkers(monacoShellRef.current, projectRoot, selectedRel, [])
+            return
+          }
+          setLintToolError(res.error && res.diagnostics.length === 0 ? res.error : null)
+          setLintDiagnostics(res.diagnostics)
+          applyHemttMarkers(monacoShellRef.current, projectRoot, selectedRel, res.diagnostics)
+        } catch (e) {
+          if (seq !== lintSeqRef.current) return
+          setLintDiagnostics([])
+          setLintToolError(e instanceof Error ? e.message : 'Check failed.')
+          applyHemttMarkers(monacoShellRef.current, projectRoot, selectedRel, [])
+        } finally {
+          if (seq === lintSeqRef.current) setLintRunning(false)
+        }
+      })()
+    }, 650)
+    return () => {
+      if (lintDebounceRef.current) clearTimeout(lintDebounceRef.current)
+    }
+  }, [environment, projectRoot, selectedRel, fileContent, fileLoading, disabled, dirty])
+
+  useEffect(() => {
+    if (environment !== 'mod') return
+    applyHemttMarkers(monacoShellRef.current, projectRoot, selectedRel, lintDiagnostics)
+  }, [environment, projectRoot, selectedRel, lintDiagnostics])
+
+  useEffect(() => {
+    if (environment === 'mod') return
+    setLintDiagnostics([])
+    setLintToolError(null)
+    setLintRunning(false)
+    const shell = monacoShellRef.current
+    const m = shell?.editor.getModel()
+    if (shell && m) {
+      shell.monaco.editor.setModelMarkers(m, 'hemtt', [])
+    }
+  }, [environment])
+
+  useEffect(() => {
+    if (!tree || treeLoading || treeErr) return
+    if (initialTreeSelectionDoneRef.current) return
+    const first = firstFileRelDepthFirst(tree)
+    if (!first) return
+    initialTreeSelectionDoneRef.current = true
+    setExpanded(new Set(ancestorDirRelPathsForFile(first)))
+    void openFile(first)
+  }, [tree, treeLoading, treeErr, openFile])
 
   async function saveFile() {
     if (!selectedRel) return
@@ -232,7 +398,7 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
           {truncated ? (
             <p className="mission-resource-truncate-note">Large tree truncated for performance.</p>
           ) : null}
-          <div className="mission-resource-tree-wrap" style={{ minHeight: "80vh" }}>
+          <div className="mission-resource-tree-wrap">
             <ul className="mission-tree-list mission-tree-root">
               <TreeBranch
                 node={tree}
@@ -255,7 +421,9 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
               <p className="mission-resource-placeholder-text">Choose a file in the tree to view or edit its contents.</p>
             </div>
           ) : (
-            <div className="mission-resource-editor-body">
+            <div
+              className={`mission-resource-editor-body${environment === 'mod' ? ' mission-resource-editor-body-mod' : ''}`}
+            >
               <div className="mission-resource-file-toolbar">
                 <code className="mission-resource-path">{selectedRel}</code>
                 <button
@@ -280,27 +448,79 @@ export function MissionResourceBrowser({ projectRoot, disabled }: Props) {
                   </p>
                 </div>
               ) : (
-                <div className="mission-resource-monaco" role="textbox" aria-label="File contents" aria-multiline>
-                  <Editor
-                    height="100%"
-                    theme={missionMonacoTheme}
-                    language={editorLanguage}
-                    value={fileContent}
-                    onChange={(v) => {
-                      setFileContent(v ?? '')
-                      setDirty(true)
-                    }}
-                    options={{
-                      readOnly: Boolean(disabled),
-                      minimap: { enabled: false },
-                      fontSize: 12,
-                      fontFamily: 'var(--font-mono), ui-monospace, monospace',
-                      wordWrap: 'on',
-                      tabSize: 2,
-                      scrollBeyondLastLine: false,
-                      automaticLayout: true,
-                    }}
-                  />
+                <div className="mission-resource-editor-editor-stack">
+                  <div className="mission-resource-monaco" role="textbox" aria-label="File contents" aria-multiline>
+                    <Editor
+                      height="100%"
+                      theme={missionMonacoTheme}
+                      language={editorLanguage}
+                      value={fileContent}
+                      onMount={onMonacoMount}
+                      onChange={(v) => {
+                        setFileContent(v ?? '')
+                        setDirty(true)
+                      }}
+                      options={{
+                        readOnly: Boolean(disabled),
+                        minimap: { enabled: false },
+                        fontSize: 12,
+                        fontFamily: 'var(--font-mono), ui-monospace, monospace',
+                        wordWrap: 'on',
+                        tabSize: 2,
+                        scrollBeyondLastLine: false,
+                        automaticLayout: true,
+                      }}
+                    />
+                  </div>
+                  {environment === 'mod' ? (
+                    <aside className="mission-resource-problems" aria-label="Project check results">
+                      <div className="mission-resource-problems-head">
+                        <span className="mission-resource-problems-title">Project check</span>
+                        {lintRunning ? <span className="mission-resource-problems-status">Working…</span> : null}
+                      </div>
+                      {lintToolError ? (
+                        <p className="mission-resource-problems-banner" role="alert">
+                          {lintToolError}
+                        </p>
+                      ) : null}
+                      {!lintRunning && !lintToolError && lintDiagnostics.length === 0 ? (
+                        <p className="mission-resource-problems-empty">No issues reported for this folder.</p>
+                      ) : null}
+                      {lintDiagnostics.length > 0 ? (
+                        <ul className="mission-resource-problems-list">
+                          {lintDiagnostics.map((d, i) => {
+                            const rel = d.file ? relFromProjectRoot(projectRoot, d.file) : null
+                            const loc =
+                              d.line != null
+                                ? `${d.line}${d.column != null ? `:${d.column}` : ''}`
+                                : ''
+                            return (
+                              <li key={`${d.file ?? ''}-${i}`} className="mission-resource-problems-item">
+                                <button
+                                  type="button"
+                                  className="mission-resource-problems-row"
+                                  disabled={!rel}
+                                  onClick={() => {
+                                    if (rel) void openFile(rel)
+                                  }}
+                                >
+                                  <span
+                                    className={`mission-resource-problems-sev mission-resource-problems-sev-${d.severity === 'warning' ? 'warning' : d.severity === 'help' || d.severity === 'info' ? 'info' : 'error'}`}
+                                  >
+                                    {d.severity === 'warning' ? 'Warning' : d.severity === 'help' || d.severity === 'info' ? 'Info' : 'Error'}
+                                  </span>
+                                  <span className="mission-resource-problems-meta">
+                                    {rel ? `${rel}${loc ? ` (${loc})` : ''}` : d.file ?? '—'}
+                                  </span>
+                                  <span className="mission-resource-problems-msg">{d.message}</span>
+                                </button>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      ) : null}
+                    </aside>
+                  ) : null}
                 </div>
               )}
             </div>

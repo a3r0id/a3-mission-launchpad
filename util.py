@@ -4,6 +4,7 @@ Unified utility entrypoint for Launchpad release workflows.
 
 Usage:
   python util.py --build
+  python util.py --build --pbo
   python util.py --publish
 """
 from __future__ import annotations
@@ -21,15 +22,14 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parent
-SPEC = REPO / "launchpad.spec"
 A3 = REPO / "A3LaunchPad"
 CLIENT_DIST = REPO / "launchpad_client" / "renderer" / "dist"
 EXT_ROOT = REPO / "launchpad_mod" / "extension"
-ADDON_PBO_NAME = "a3_launchpad_ext_core.pbo"
+ADDON_PBO_NAME = "a3_launchpad_ext_main.pbo"
 HEMTT_BUILD_ADDONS = REPO / "launchpad_mod" / ".hemttout" / "build" / "addons"
 APP_DIR = REPO / "launchpad_client" / "app"
 APP_PACKAGE_JSON = APP_DIR / "package.json"
-APP_MAIN_JS = APP_DIR / "src" / "main.js"
+APP_MAIN_TS = APP_DIR / "src" / "index.ts"
 FORGE_CONFIG = APP_DIR / "forge.config.js"
 VERSION_JSON = REPO / "version.json"
 ROOT_CONFIG_JSON = REPO / "config.json"
@@ -223,10 +223,6 @@ def preflight_package() -> None:
             f"Missing web client build at {CLIENT_DIST}.\n"
             "  cd launchpad_client/renderer && npm ci && npm run build"
         )
-    if not SPEC.is_file():
-        _die(f"Missing PyInstaller spec: {SPEC}")
-
-
 def stage_web_dist() -> None:
     dst = A3 / "web_dist"
     if dst.exists():
@@ -287,13 +283,15 @@ def _find_addon_pbo() -> Path | None:
     candidates: list[Path] = []
     if HEMTT_BUILD_ADDONS.is_dir():
         for p in HEMTT_BUILD_ADDONS.glob("*.pbo"):
-            if "a3_launchpad_ext_core" in p.name.lower():
+            n = p.name.lower()
+            if "a3_launchpad_ext" in n and "diagnostics" not in n:
                 candidates.append(p)
     releases = REPO / "launchpad_mod" / "releases"
     if releases.is_dir():
         for p in releases.rglob("*.pbo"):
             rel = str(p).replace("\\", "/").lower()
-            if "/addons/" in rel and "a3_launchpad_ext_core" in p.name.lower():
+            n = p.name.lower()
+            if "/addons/" in rel and "a3_launchpad_ext" in n and "diagnostics" not in n:
                 candidates.append(p)
     if not candidates:
         return None
@@ -319,7 +317,7 @@ def stage_mod_deliverables() -> None:
 
     pbo_src = _find_addon_pbo()
     dest_pbo = addons_dir / ADDON_PBO_NAME
-    loose_dir = addons_dir / "a3_launchpad_ext_core"
+    loose_dir = addons_dir / "a3_launchpad_ext_main"
     if loose_dir.is_dir():
         shutil.rmtree(loose_dir)
     if pbo_src is None:
@@ -334,35 +332,14 @@ def stage_mod_deliverables() -> None:
     print(f"Staged addon PBO: {pbo_src.name} -> {dest_pbo}")
 
 
-def _package_core() -> Path:
+def _package_core() -> None:
     preflight_package()
     A3.mkdir(parents=True, exist_ok=True)
     stage_web_dist()
-    bin_out = A3 / "bin"
-    bin_out.mkdir(parents=True, exist_ok=True)
-    work = REPO / "build" / "pyinstaller"
-    work.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "PyInstaller",
-            str(SPEC),
-            "--noconfirm",
-            "--clean",
-            "--distpath",
-            str(bin_out),
-            "--workpath",
-            str(work),
-        ],
-        cwd=str(REPO),
-        check=True,
-    )
     stage_mod_deliverables()
-    return bin_out
 
 
-def run_build() -> None:
+def run_build(*, rebuild_pbo: bool = False) -> None:
     renderer = REPO / "launchpad_client" / "renderer"
     mod_root = REPO / "launchpad_mod"
     ext_dir = mod_root / "extension"
@@ -385,21 +362,34 @@ def run_build() -> None:
         build_cmd += ["--config", "Release"]
     subprocess.run(build_cmd, cwd=str(REPO), check=True)
 
-    require_hemtt = os.environ.get("LAUNCHPAD_REQUIRE_HEMTT", "0") == "1"
-    if shutil.which("hemtt"):
+    require_hemtt_env = os.environ.get("LAUNCHPAD_REQUIRE_HEMTT", "0") == "1"
+    hemtt = shutil.which("hemtt")
+    if hemtt:
+        if rebuild_pbo:
+            print("Rebuilding addon PBO (hemtt build)...")
         _run(["hemtt", "build"], cwd=mod_root)
-    elif require_hemtt:
-        _die("HEMTT was not found on PATH, but LAUNCHPAD_REQUIRE_HEMTT=1 is set.")
+    elif rebuild_pbo or require_hemtt_env:
+        reasons: list[str] = []
+        if rebuild_pbo:
+            reasons.append("--pbo was passed")
+        if require_hemtt_env:
+            reasons.append("LAUNCHPAD_REQUIRE_HEMTT=1 is set")
+        _die(
+            "HEMTT was not found on PATH, but an addon PBO build is required ("
+            + "; ".join(reasons)
+            + ").\n"
+            "Install HEMTT so `hemtt` is on PATH, or run `hemtt build` in launchpad_mod."
+        )
     else:
         print(
             "Warning: HEMTT is not installed; skipping 'hemtt build'.",
             file=sys.stderr,
         )
 
-    bin_out = _package_core()
+    _package_core()
     stage_electron_app()
     print(
-        f"Build complete: server in {bin_out}, web UI in {A3 / 'web_dist'}, "
+        f"Build complete: web UI in {A3 / 'web_dist'}, "
         f"mod under {A3 / 'mod'}, Electron under {A3 / 'app'}"
     )
 
@@ -433,7 +423,7 @@ def _sync_publish_versions() -> str:
 
 
 def _validate_staged_layout() -> None:
-    required_paths = (A3 / "bin", A3 / "web_dist")
+    required_paths = (A3 / "web_dist", A3 / "app")
     missing = [str(p) for p in required_paths if not p.exists()]
     if missing:
         _die(
@@ -449,19 +439,19 @@ def _ensure_node_modules() -> None:
 
 
 def _validate_update_config() -> None:
-    main_js = APP_MAIN_JS.read_text(encoding="utf-8")
+    main_ts = APP_MAIN_TS.read_text(encoding="utf-8")
     forge_js = FORGE_CONFIG.read_text(encoding="utf-8")
     required_snippets = (
-        ("main.js", "updateElectronApp("),
-        ("main.js", "UpdateSourceType.ElectronPublicUpdateService"),
-        ("main.js", "repo: 'a3r0id/a3-mission-launchpad'"),
+        ("index.ts", "updateElectronApp("),
+        ("index.ts", "UpdateSourceType.ElectronPublicUpdateService"),
+        ("index.ts", "repo: 'a3r0id/a3-mission-launchpad'"),
         ("forge.config.js", "name: '@electron-forge/publisher-github'"),
         ("forge.config.js", "owner: 'a3r0id'"),
         ("forge.config.js", "name: 'a3-mission-launchpad'"),
         ("forge.config.js", "tagPrefix: 'v'"),
     )
     for file_name, snippet in required_snippets:
-        source = main_js if file_name == "main.js" else forge_js
+        source = main_ts if file_name == "index.ts" else forge_js
         if snippet not in source:
             _die(f"Missing expected snippet in {file_name}: {snippet}")
 
@@ -520,13 +510,20 @@ def run_publish() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Launchpad build/publish utility.")
     parser.add_argument("--build", action="store_true", help="Run the full build pipeline.")
+    parser.add_argument(
+        "--pbo",
+        action="store_true",
+        help="With --build: require HEMTT and run hemtt build so the addon PBO is rebuilt.",
+    )
     parser.add_argument("--publish", action="store_true", help="Build and publish release artifacts.")
     args = parser.parse_args()
 
     if args.build == args.publish:
         parser.error("Specify exactly one action: --build or --publish")
+    if args.pbo and not args.build:
+        parser.error("--pbo is only valid with --build")
     if args.build:
-        run_build()
+        run_build(rebuild_pbo=args.pbo)
         return
     run_publish()
 

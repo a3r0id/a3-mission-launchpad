@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react'
 import { AppPreferencesDialog } from './components/AppPreferencesDialog'
 import { Sidebar } from './components/Sidebar'
+import { SplashScreen } from './components/SplashScreen'
 import { AppPreferencesProvider } from './context/AppPreferencesContext'
 import { getElectronIpc } from './electronIpc'
 import { HomePage } from './pages/HomePage'
-import { MissionBuildPage } from './pages/MissionBuildPage'
 import { MissionListPage } from './pages/MissionList'
+import { ModProjectsPage } from './pages/ModProjects'
 import { SettingsPage } from './pages/SettingsPage'
 import { TestingPage } from './pages/Testing'
 import { LoggingPage } from './pages/Logging'
+import { DebuggingPage } from './pages/Debugging'
 import './App.css'
 
-type NavId = 'home' | 'mission' | 'managed-missions' | 'testing' | 'logging' | 'settings'
+type NavId = 'home' | 'managed-missions' | 'managed-mod-projects' | 'testing' | 'debugging' | 'logging' | 'settings'
 
 type MenuEventPayload = { event?: string }
 
@@ -36,6 +38,7 @@ export default function App() {
 
   return (
     <AppPreferencesProvider>
+      <SplashScreen />
       <div className="app-shell">
         <Sidebar
           active={page}
@@ -46,14 +49,15 @@ export default function App() {
         <div className="shell-main">
           <main className="shell-content" id="main">
             {page === 'home' && (
-              <HomePage onGoMission={() => setPage('mission')} onGoSettings={() => setPage('settings')} />
+              <HomePage onGoMission={() => setPage('managed-missions')} onGoSettings={() => setPage('settings')} />
             )}
             {page === 'settings' && <SettingsPage />}
-            {page === 'mission' && <MissionBuildPage onGoSettings={() => setPage('settings')} />}
             {page === 'managed-missions' && (
               <MissionListPage onOpenSettings={() => setPage('settings')} />
             )}
+            {page === 'managed-mod-projects' && <ModProjectsPage />}
             {page === 'testing' && <TestingPage />}
+            {page === 'debugging' && <DebuggingPage />}
             {page === 'logging' && <LoggingPage />}
           </main>
         </div>

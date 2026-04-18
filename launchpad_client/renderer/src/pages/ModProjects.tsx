@@ -1,0 +1,576 @@
+import { useCallback, useEffect, useState } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faEdit, faFolderOpen, faTrash, faEllipsisVertical } from '@fortawesome/free-solid-svg-icons'
+import {
+  createManagedModProject,
+  deleteManagedModProject,
+  fetchManagedModProjects,
+  updateManagedModProject,
+  type ManagedModProject,
+} from '../api/launchpad'
+import Util from '../Util'
+import { ScriptEditorModal } from '../components/IntegratedScriptEditor'
+
+export function ModProjectsPage() {
+  const [projects, setProjects] = useState<ManagedModProject[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saveInfo, setSaveInfo] = useState<string | null>(null)
+  const [actionErr, setActionErr] = useState<string | null>(null)
+
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const [createDescription, setCreateDescription] = useState('')
+  const [createBusy, setCreateBusy] = useState(false)
+  const [createErr, setCreateErr] = useState<string | null>(null)
+
+  const [editProject, setEditProject] = useState<ManagedModProject | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editBusy, setEditBusy] = useState(false)
+  const [editErr, setEditErr] = useState<string | null>(null)
+
+  const [deleteTarget, setDeleteTarget] = useState<ManagedModProject | null>(null)
+  const [scriptEditor, setScriptEditor] = useState<{ root: string; title: string } | null>(null)
+  const [modMenuOpenId, setModMenuOpenId] = useState<string | null>(null)
+  const [deleteRemoveDisk, setDeleteRemoveDisk] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteErr, setDeleteErr] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
+    try {
+      const list = await fetchManagedModProjects()
+      setProjects(list)
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Could not load mod projects')
+      setProjects([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  useEffect(() => {
+    if (!modMenuOpenId) return
+    const onDocMouseDown = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null
+      if (!el) return
+      if (el.closest(`[data-mod-row-menu="${modMenuOpenId}"]`)) return
+      setModMenuOpenId(null)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [modMenuOpenId])
+
+  function openCreate() {
+    setCreateName('')
+    setCreateDescription('')
+    setCreateErr(null)
+    setCreateOpen(true)
+  }
+
+  async function submitCreate() {
+    setCreateBusy(true)
+    setCreateErr(null)
+    try {
+      const res = await createManagedModProject({
+        name: createName.trim(),
+        description: createDescription.trim(),
+      })
+      if ('error' in res && res.error) {
+        setCreateErr(res.error)
+        return
+      }
+      if (!('ok' in res) || !res.ok) {
+        setCreateErr('Create failed.')
+        return
+      }
+
+      const root = res.project.project_path?.trim() ?? ''
+      if (root) {
+        const init = await Util.initModProjectHemtt(root, { name: createName.trim() })
+        if (!init.ok) {
+          const needsDesktop =
+            typeof init.error === 'string' &&
+            init.error.includes('requires the Launchpad desktop')
+          if (needsDesktop) {
+            setCreateOpen(false)
+            setSaveInfo(
+              'Mod project created. Open this project in the desktop app to add starter build files to the folder.',
+            )
+            void load()
+            return
+          }
+          try {
+            await deleteManagedModProject(res.project.id, { deleteProjectFiles: true })
+          } catch {
+            /* rollback best effort */
+          }
+          setCreateErr(init.error ?? 'Could not add starter build files. The new entry was removed.')
+          return
+        }
+      }
+
+      setCreateOpen(false)
+      setSaveInfo('Mod project created with starter build files in the folder.')
+      void load()
+    } catch (e) {
+      setCreateErr(e instanceof Error ? e.message : 'Create failed')
+    } finally {
+      setCreateBusy(false)
+    }
+  }
+
+  function openEdit(p: ManagedModProject) {
+    setEditProject(p)
+    setEditName((p.name ?? '').trim())
+    setEditDescription((p.description ?? '').trim())
+    setEditErr(null)
+  }
+
+  async function submitEdit() {
+    if (!editProject) return
+    setEditBusy(true)
+    setEditErr(null)
+    try {
+      const res = await updateManagedModProject(editProject.id, {
+        name: editName.trim(),
+        description: editDescription.trim(),
+      })
+      if ('error' in res && res.error) {
+        setEditErr(res.error)
+        return
+      }
+      if ('ok' in res && res.ok) {
+        setEditProject(res.project)
+        setSaveInfo('Mod project updated.')
+        void load()
+      }
+    } catch (e) {
+      setEditErr(e instanceof Error ? e.message : 'Update failed')
+    } finally {
+      setEditBusy(false)
+    }
+  }
+
+  function openDelete(p: ManagedModProject) {
+    setDeleteErr(null)
+    setDeleteRemoveDisk(false)
+    setDeleteTarget(p)
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setDeleteBusy(true)
+    setDeleteErr(null)
+    try {
+      await deleteManagedModProject(deleteTarget.id, { deleteProjectFiles: deleteRemoveDisk })
+      setDeleteTarget(null)
+      setSaveInfo(deleteRemoveDisk ? 'Mod project removed and its folder was deleted.' : 'Mod project removed from Launchpad.')
+      void load()
+    } catch (e) {
+      setDeleteErr(e instanceof Error ? e.message : 'Delete failed')
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
+  return (
+    <div className="page-stack">
+      <ScriptEditorModal
+        open={scriptEditor !== null}
+        projectRoot={scriptEditor?.root ?? ''}
+        contextTitle={scriptEditor?.title ?? ''}
+        environment="mod"
+        onClose={() => setScriptEditor(null)}
+      />
+      {createOpen ? (
+        <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="new-mod-project-title">
+          <button
+            type="button"
+            className="modal-backdrop"
+            aria-label="Close dialog"
+            onClick={() => !createBusy && setCreateOpen(false)}
+          />
+          <div className="modal-dialog modal-dialog-wide mission-edit-dialog">
+            <header className="mission-edit-header">
+              <div className="mission-edit-header-main">
+                <p className="mission-edit-eyebrow">Mod projects</p>
+                <h2 id="new-mod-project-title" className="mission-edit-title">
+                  New mod project
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="mission-edit-close"
+                onClick={() => !createBusy && setCreateOpen(false)}
+                aria-label="Close"
+                disabled={createBusy}
+              >
+                <span aria-hidden>×</span>
+              </button>
+            </header>
+            <div className="mission-edit-surface">
+              <div className="mission-edit-section">
+                <p className="mission-edit-lead">
+                  This becomes a folder under Mod projects in Launchpad&apos;s data area. Use a short name with no
+                  slashes (same rules as a single folder name). In the desktop app, starter build files are added there
+                  automatically so you can use the Script Editor and build when you are ready.
+                </p>
+                <label className="field">
+                  <span className="field-label">Project name</span>
+                  <input
+                    type="text"
+                    className="field-input"
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
+                    disabled={createBusy}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">Description (optional)</span>
+                  <input
+                    type="text"
+                    className="field-input"
+                    value={createDescription}
+                    onChange={(e) => setCreateDescription(e.target.value)}
+                    disabled={createBusy}
+                    autoComplete="off"
+                  />
+                </label>
+                {createErr ? (
+                  <p className="form-banner form-banner-error" role="alert">
+                    {createErr}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <footer className="mission-edit-footer">
+              <div className="mission-edit-footer-actions">
+                <button type="button" className="btn btn-primary" disabled={createBusy} onClick={() => void submitCreate()}>
+                  {createBusy ? 'Creating…' : 'Create'}
+                </button>
+                <button type="button" className="btn btn-ghost" disabled={createBusy} onClick={() => setCreateOpen(false)}>
+                  Cancel
+                </button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {editProject ? (
+        <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="edit-mod-project-title">
+          <button
+            type="button"
+            className="modal-backdrop"
+            aria-label="Close dialog"
+            onClick={() => !editBusy && setEditProject(null)}
+          />
+          <div className="modal-dialog modal-dialog-wide mission-edit-dialog">
+            <header className="mission-edit-header">
+              <div className="mission-edit-header-main">
+                <p className="mission-edit-eyebrow">Mod projects</p>
+                <h2 id="edit-mod-project-title" className="mission-edit-title">
+                  Edit mod project
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="mission-edit-close"
+                onClick={() => !editBusy && setEditProject(null)}
+                aria-label="Close"
+                disabled={editBusy}
+              >
+                <span aria-hidden>×</span>
+              </button>
+            </header>
+            <div className="mission-edit-surface">
+              <div className="mission-edit-section">
+                <p className="mission-edit-lead">
+                  Changes here update what Launchpad shows. The folder on disk keeps its original name.
+                </p>
+                <label className="field">
+                  <span className="field-label">Name</span>
+                  <input
+                    type="text"
+                    className="field-input"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    disabled={editBusy}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">Description</span>
+                  <input
+                    type="text"
+                    className="field-input"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    disabled={editBusy}
+                    autoComplete="off"
+                  />
+                </label>
+                {editErr ? (
+                  <p className="form-banner form-banner-error" role="alert">
+                    {editErr}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <footer className="mission-edit-footer">
+              <div className="mission-edit-footer-actions">
+                <button type="button" className="btn btn-primary" disabled={editBusy} onClick={() => void submitEdit()}>
+                  {editBusy ? 'Saving…' : 'Save'}
+                </button>
+                <button type="button" className="btn btn-ghost" disabled={editBusy} onClick={() => setEditProject(null)}>
+                  Close
+                </button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="delete-mod-project-title">
+          <button
+            type="button"
+            className="modal-backdrop"
+            aria-label="Close dialog"
+            onClick={() => !deleteBusy && setDeleteTarget(null)}
+            disabled={deleteBusy}
+          />
+          <div className="modal-dialog">
+            <h2 id="delete-mod-project-title" className="card-title">
+              Remove mod project
+            </h2>
+            <p className="card-body" style={{ margin: 0, fontSize: 13 }}>
+              Remove <strong>{(deleteTarget.name ?? '').trim() || 'this project'}</strong> from Launchpad.
+              {deleteTarget.project_path?.trim() ? (
+                <>
+                  {' '}
+                  You can also delete its project folder from your computer; that cannot be undone.
+                </>
+              ) : null}
+            </p>
+            {deleteTarget.project_path?.trim() ? (
+              <label className="field" style={{ marginTop: 12 }}>
+                <span className="field-label">
+                  <input
+                    type="checkbox"
+                    checked={deleteRemoveDisk}
+                    disabled={deleteBusy}
+                    onChange={(e) => setDeleteRemoveDisk(e.target.checked)}
+                  />{' '}
+                  Also delete the project folder on disk
+                </span>
+              </label>
+            ) : null}
+            {deleteErr ? (
+              <p className="form-banner form-banner-error" role="alert">
+                {deleteErr}
+              </p>
+            ) : null}
+            <div className="modal-actions" style={{ marginTop: 16 }}>
+              <button type="button" className="btn btn-primary" disabled={deleteBusy} onClick={() => void confirmDelete()}>
+                {deleteBusy ? 'Removing…' : 'Remove'}
+              </button>
+              <button type="button" className="btn btn-ghost" disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* <header className="page-header">
+        <h1 className="page-title">Mod projects</h1>
+      </header> */}
+
+      {loadError ? (
+        <p className="form-banner form-banner-error" role="alert">
+          {loadError}
+        </p>
+      ) : null}
+      {actionErr ? (
+        <p className="form-banner form-banner-error" role="alert">
+          {actionErr}
+        </p>
+      ) : null}
+      {saveInfo && !createOpen && !editProject && !deleteTarget ? (
+        <p className="form-banner form-banner-success" role="status">
+          {saveInfo}
+        </p>
+      ) : null}
+
+      <div className="card">
+        <div className="mission-list-card-head">
+          <h2 className="card-title">All mod projects</h2>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="btn btn-primary" onClick={() => openCreate()}>
+              + New mod project
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {loading ? <p className="card-body">Loading…</p> : null}
+
+        {!loading && projects.length === 0 && !loadError ? (
+          <p className="card-body">No mod projects yet.</p>
+        ) : null}
+
+        {!loading && projects.length > 0 ? (
+          <ul className="mission-list">
+            {projects.map((p) => (
+              <li key={p.id} className="mission-list-item">
+                <div className="mission-list-row">
+                  <div className="mission-list-main">
+                    <div className="mission-list-title">{(p.name ?? '').trim() || '—'}</div>
+                    <div className="mission-list-meta">
+                      {p.project_path?.trim() ? (
+                        <span className="mission-list-pill mission-list-pill-on">Folder linked</span>
+                      ) : (
+                        <span className="mission-list-pill mission-list-pill-off">No folder</span>
+                      )}
+                    </div>
+                    {p.description?.trim() ? <p className="mission-list-desc">{p.description}</p> : null}
+                    {p.project_path?.trim() ? (
+                      <div className="mod-project-script-row">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          disabled={loading}
+                          onClick={() => {
+                            const root = p.project_path?.trim()
+                            if (!root) return
+                            setScriptEditor({ root, title: (p.name ?? '').trim() || 'Mod project' })
+                          }}
+                        >
+                          Open in Script Editor
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => openEdit(p)}
+                    title="Edit"
+                    disabled={loading}
+                  >
+                    <FontAwesomeIcon icon={faEdit} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => openDelete(p)}
+                    disabled={loading}
+                    title="Remove from Launchpad"
+                  >
+                    <FontAwesomeIcon icon={faTrash} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setActionErr(null)
+                      void Util.revealPathInExplorer(p.project_path ?? '', p.project_path ?? '').catch((e) =>
+                        setActionErr(e instanceof Error ? e.message : 'Could not open folder'),
+                      )
+                    }}
+                    disabled={!p.project_path?.trim() || loading}
+                    title="Open folder"
+                  >
+                    <FontAwesomeIcon icon={faFolderOpen} />
+                  </button>
+                  <div className="mission-list-menu-anchor" data-mod-row-menu={p.id}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      aria-haspopup="menu"
+                      aria-expanded={modMenuOpenId === p.id}
+                      aria-controls={`mod-row-menu-${p.id}`}
+                      id={`mod-row-menu-trigger-${p.id}`}
+                      disabled={loading}
+                      title="More actions"
+                      aria-label="More actions"
+                      onClick={() => setModMenuOpenId((cur) => (cur === p.id ? null : p.id))}
+                    >
+                      <FontAwesomeIcon icon={faEllipsisVertical} />
+                    </button>
+                    {modMenuOpenId === p.id ? (
+                      <ul
+                        className="mission-list-dropdown"
+                        id={`mod-row-menu-${p.id}`}
+                        role="menu"
+                        aria-labelledby={`mod-row-menu-trigger-${p.id}`}
+                      >
+                        <li role="none">
+                          <button
+                            type="button"
+                            className="mission-list-dropdown-item"
+                            role="menuitem"
+                            disabled={!p.project_path?.trim()}
+                            onClick={() => {
+                              const root = p.project_path?.trim()
+                              if (!root) return
+                              setScriptEditor({ root, title: (p.name ?? '').trim() || 'Mod project' })
+                              setModMenuOpenId(null)
+                            }}
+                          >
+                            Open in Script Editor
+                          </button>
+                        </li>
+                        <li role="none">
+                          <button
+                            type="button"
+                            className="mission-list-dropdown-item"
+                            role="menuitem"
+                            disabled={!p.project_path?.trim()}
+                            onClick={() => {
+                              const root = p.project_path?.trim()
+                              if (!root) return
+                              setModMenuOpenId(null)
+                              setActionErr(null)
+                              void (async () => {
+                                const init = await Util.initModProjectHemtt(root, {
+                                  name: (p.name ?? '').trim() || undefined,
+                                })
+                                if (!init.ok) {
+                                  setActionErr(init.error ?? 'Could not add starter build files.')
+                                  return
+                                }
+                                setSaveInfo(
+                                  init.initialized === false
+                                    ? 'Starter build files were already present.'
+                                    : 'Starter build files are ready.',
+                                )
+                              })()
+                            }}
+                          >
+                            Add starter build files
+                          </button>
+                        </li>
+                      </ul>
+                    ) : null}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    </div>
+  )
+}

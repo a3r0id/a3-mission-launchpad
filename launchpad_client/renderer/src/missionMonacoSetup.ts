@@ -5,8 +5,8 @@ import { createOnigurumaEngine } from '@shikijs/engine-oniguruma'
 import type { Monaco } from '@monaco-editor/react'
 import * as monacoEditor from 'monaco-editor'
 
-import extGrammar from '../../../launchpad_server/thirdparty/syntax/ext.min.json'
-import sqfGrammar from '../../../launchpad_server/thirdparty/syntax/sqf.min.json'
+import extGrammar from '../static/syntax/ext.min.json'
+import sqfGrammar from '../static/syntax/sqf.min.json'
 
 const MISSION_EDITOR_THEME = 'dark-plus' as const
 

@@ -7,10 +7,9 @@
     "type": "git",
     "url": "https://github.com/a3r0id/a3-mission-launchpad.git"
   },
-  "main": ".vite/build/main.js",
+  "main": ".vite/build/index.js",
   "scripts": {
-    "dev": "concurrently -k -n backend,electron \"npm run dev:backend\" \"wait-on tcp:127.0.0.1:8111 && npm run dev:electron:inspect\"",
-    "dev:backend": "node ../scripts/run-launchpad-backend.mjs",
+    "dev": "npm run dev:electron:inspect",
     "dev:electron": "electron-forge start",
     "dev:electron:inspect": "electron-forge start -- --inspect=9229 --remote-debugging-port=9222",
     "start": "electron-forge start",
@@ -32,17 +31,15 @@
     "@electron-forge/plugin-vite": "^7.11.1",
     "@electron-forge/publisher-github": "^7.11.1",
     "@electron/fuses": "^1.8.0",
+    "@types/node": "^25.6.0",
     "@vitejs/plugin-react": "^4.3.4",
     "babel-loader": "^9.2.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "clean-webpack-plugin": "^4.0.0",
-    "concurrently": "^9.1.2",
     "electron": "^33.2.0",
     "electron-reload": "^2.0.0-alpha.1",
-    "express": "^4.21.1",
-    "sqlite3": "^5.1.7",
+    "typescript": "^6.0.2",
     "vite": "^6.3.5",
-    "wait-on": "^8.0.1",
     "webpack": "^5.96.1",
     "webpack-cli": "^5.1.4"
   },
@@ -53,6 +50,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.1"
+    "electron-squirrel-startup": "^1.0.1",
+    "node-ssh": "^13.2.1"
   }
 }

@@ -3,6 +3,7 @@
  * Covers common IPC quirks and provides a high-level programming interface for the client.
  */
 import { apiUrl } from './api/launchpad'
+import { getElectronIpc } from './electronIpc'
 
 const jsonHeaders = {
   Accept: 'application/json',
@@ -22,6 +23,44 @@ export type BuildPboResult = {
   code?: string
 }
 
+/** Result of ``Util.buildModProjectHemtt`` (HEMTT ``hemtt build`` on the Electron backend). */
+export type BuildModProjectHemttResult = {
+  ok: boolean
+  pboPath?: string
+  pboPaths?: string[]
+  log?: string[]
+  error?: string
+  code?: 'pbo_exists' | 'hemtt_missing' | 'no_pbo_output' | 'hemtt_failed' | string
+}
+
+export type HemttDiagnostic = {
+  severity: 'error' | 'warning' | 'info' | 'help'
+  message: string
+  file?: string
+  line?: number
+  column?: number
+}
+
+/** Result of ``Util.initModProjectHemtt`` (writes a minimal HEMTT layout when missing). */
+export type InitModProjectHemttResult = {
+  ok: boolean
+  initialized?: boolean
+  project_path?: string
+  log?: string[]
+  error?: string
+  code?: 'missing_path' | 'not_directory' | 'write_failed' | string
+}
+
+/** Result of ``Util.lintModProjectHemtt`` (``hemtt check`` on the Electron backend). */
+export type LintModProjectHemttResult = {
+  ok: boolean
+  exitCode?: number
+  diagnostics: HemttDiagnostic[]
+  log?: string[]
+  error?: string
+  code?: 'hemtt_missing' | 'hemtt_failed' | string
+}
+
 /** Server returned HTTP 409: target ``.pbo`` path already exists; user may confirm overwrite. */
 export class PboOutputExistsError extends Error {
   readonly code = 'pbo_exists' as const
@@ -35,6 +74,28 @@ export class PboOutputExistsError extends Error {
 }
 
 class Util {
+  private static buildPboPayload(
+    projectPath: string,
+    outputPath?: string,
+    missionIdentity?: { missionName: string; mapSuffix: string },
+    options?: { overwrite?: boolean },
+  ): Record<string, unknown> {
+    const body: Record<string, unknown> = {
+      project_path: projectPath,
+      output_path: outputPath?.trim() ?? '',
+    }
+    if (options?.overwrite) {
+      body.overwrite = true
+    }
+    const n = missionIdentity?.missionName?.trim()
+    const m = missionIdentity?.mapSuffix?.trim()
+    if (n && m) {
+      body.mission_name = n
+      body.map_suffix = m
+    }
+    return body
+  }
+
   static async runCommand(command: string) {
     const response = await fetch(apiUrl('/api/run-command'), {
       method: 'POST',
@@ -55,6 +116,21 @@ class Util {
   }
 
   static async getFileContents(path: string) {
+    const ipc = getElectronIpc()
+    if (ipc) {
+      const data = (await ipc.invoke('file-get-contents', path)) as { content?: string; error?: string } | null
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid response from desktop API.')
+      }
+      if (typeof data.error === 'string' && data.error.trim()) {
+        throw new Error(data.error)
+      }
+      if (typeof data.content !== 'string') {
+        throw new Error('Invalid file response')
+      }
+      return data.content
+    }
+
     const q = new URLSearchParams({ path })
     const response = await fetch(apiUrl(`/api/file-contents?${q.toString()}`), {
       method: 'GET',
@@ -72,6 +148,24 @@ class Util {
   }
 
   static async setFileContents(path: string, contents: string) {
+    const ipc = getElectronIpc()
+    if (ipc) {
+      const data = (await ipc.invoke('file-set-contents', {
+        path,
+        contents,
+      })) as { ok?: boolean; error?: string } | null
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid response from desktop API.')
+      }
+      if (typeof data.error === 'string' && data.error.trim()) {
+        throw new Error(data.error)
+      }
+      if (data.ok !== true) {
+        throw new Error('Could not save file')
+      }
+      return
+    }
+
     const response = await fetch(apiUrl('/api/file-contents'), {
       method: 'PATCH',
       headers: jsonHeaders,
@@ -90,24 +184,24 @@ class Util {
     missionIdentity?: { missionName: string; mapSuffix: string },
     options?: { overwrite?: boolean },
   ): Promise<BuildPboResult> {
-    const body: Record<string, unknown> = {
-      project_path: projectPath,
-      output_path: outputPath?.trim() ?? '',
-      stream: false,
+    const body = Util.buildPboPayload(projectPath, outputPath, missionIdentity, options)
+    const ipc = getElectronIpc()
+    if (ipc) {
+      const data = (await ipc.invoke('build-mission-pbo', body)) as BuildPboResult
+      return {
+        ok: data?.ok === true,
+        pboPath: typeof data?.pboPath === 'string' ? data.pboPath : undefined,
+        log: Array.isArray(data?.log) ? data.log : [],
+        error: typeof data?.error === 'string' ? data.error : undefined,
+        code: typeof data?.code === 'string' ? data.code : undefined,
+      }
     }
-    if (options?.overwrite) {
-      body.overwrite = true
-    }
-    const n = missionIdentity?.missionName?.trim()
-    const m = missionIdentity?.mapSuffix?.trim()
-    if (n && m) {
-      body.mission_name = n
-      body.map_suffix = m
-    }
+
+    // Fallback for browser-only mode where Electron IPC is unavailable.
     const response = await fetch(apiUrl('/api/build-mission-pbo'), {
       method: 'POST',
       headers: jsonHeaders,
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, stream: false }),
     })
     const data = (await response.json().catch(() => ({}))) as BuildPboResult & {
       error?: string
@@ -128,6 +222,88 @@ class Util {
   }
 
   /**
+   * Desktop: ensures ``.hemtt/project.toml`` and a starter addon exist (``hemtt new`` is interactive-only).
+   * Safe to call on an already-initialized project (no changes).
+   */
+  static async initModProjectHemtt(
+    projectPath: string,
+    options?: { name?: string; author?: string; prefix?: string; mainprefix?: string },
+  ): Promise<InitModProjectHemttResult> {
+    const body: Record<string, unknown> = {
+      project_path: projectPath,
+    }
+    if (options?.name?.trim()) body.name = options.name.trim()
+    if (options?.author?.trim()) body.author = options.author.trim()
+    if (options?.prefix?.trim()) body.prefix = options.prefix.trim()
+    if (options?.mainprefix?.trim()) body.mainprefix = options.mainprefix.trim()
+    const ipc = getElectronIpc()
+    if (!ipc) {
+      return { ok: false, error: 'Initializing a mod project requires the Launchpad desktop app.' }
+    }
+    const data = (await ipc.invoke('init-mod-project-hemtt', body)) as InitModProjectHemttResult
+    const initFlag = data?.initialized
+    return {
+      ok: data?.ok === true,
+      initialized: typeof initFlag === 'boolean' ? initFlag : undefined,
+      project_path: typeof data?.project_path === 'string' ? data.project_path : undefined,
+      log: Array.isArray(data?.log) ? data.log : [],
+      error: typeof data?.error === 'string' ? data.error : undefined,
+      code: typeof data?.code === 'string' ? data.code : undefined,
+    }
+  }
+
+  /** Desktop: runs ``hemtt build`` in the mod project folder; optional ``output_path`` copies the newest built PBO. */
+  static async buildModProjectHemtt(
+    projectPath: string,
+    outputPath?: string,
+    options?: { overwrite?: boolean },
+  ): Promise<BuildModProjectHemttResult> {
+    const body: Record<string, unknown> = {
+      project_path: projectPath,
+      output_path: outputPath?.trim() ?? '',
+    }
+    if (options?.overwrite) {
+      body.overwrite = true
+    }
+    const ipc = getElectronIpc()
+    if (ipc) {
+      const data = (await ipc.invoke('build-mod-project-hemtt', body)) as BuildModProjectHemttResult
+      return {
+        ok: data?.ok === true,
+        pboPath: typeof data?.pboPath === 'string' ? data.pboPath : undefined,
+        pboPaths: Array.isArray(data?.pboPaths) ? (data.pboPaths as string[]) : undefined,
+        log: Array.isArray(data?.log) ? data.log : [],
+        error: typeof data?.error === 'string' ? data.error : undefined,
+        code: typeof data?.code === 'string' ? data.code : undefined,
+      }
+    }
+    return { ok: false, error: 'Mod project builds require the Launchpad desktop app.' }
+  }
+
+  /** Desktop: runs ``hemtt check`` in the mod project folder and returns structured diagnostics. */
+  static async lintModProjectHemtt(projectPath: string): Promise<LintModProjectHemttResult> {
+    const ipc = getElectronIpc()
+    if (!ipc) {
+      return {
+        ok: false,
+        diagnostics: [],
+        error: 'Checking the project requires the Launchpad desktop app.',
+      }
+    }
+    const data = (await ipc.invoke('lint-mod-project-hemtt', {
+      project_path: projectPath,
+    })) as LintModProjectHemttResult
+    return {
+      ok: data?.ok === true,
+      exitCode: typeof data?.exitCode === 'number' ? data.exitCode : undefined,
+      diagnostics: Array.isArray(data?.diagnostics) ? data.diagnostics : [],
+      log: Array.isArray(data?.log) ? data.log : [],
+      error: typeof data?.error === 'string' ? data.error : undefined,
+      code: typeof data?.code === 'string' ? data.code : undefined,
+    }
+  }
+
+  /**
    * Stream NDJSON events from the build (log lines, then done or error).
    */
   static async buildMissionPBOStream(
@@ -137,24 +313,34 @@ class Util {
     missionIdentity?: { missionName: string; mapSuffix: string },
     options?: { overwrite?: boolean },
   ): Promise<void> {
-    const body: Record<string, unknown> = {
-      project_path: projectPath,
-      output_path: outputPath?.trim() ?? '',
-      stream: true,
+    const body = Util.buildPboPayload(projectPath, outputPath, missionIdentity, options)
+    const ipc = getElectronIpc()
+    if (ipc) {
+      const data = (await ipc.invoke('build-mission-pbo', body)) as BuildPboResult
+      if (data?.code === 'pbo_exists') {
+        throw new PboOutputExistsError(
+          typeof data.pboPath === 'string' ? data.pboPath : '',
+          typeof data.error === 'string' ? data.error : undefined,
+        )
+      }
+      if (!data?.ok) {
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Could not build mission PBO.')
+      }
+      for (const line of Array.isArray(data.log) ? data.log : []) {
+        onEvent({ type: 'log', message: line })
+      }
+      if (typeof data.pboPath === 'string') {
+        onEvent({ type: 'done', pboPath: data.pboPath })
+        return
+      }
+      throw new Error('Build finished without a PBO output path.')
     }
-    if (options?.overwrite) {
-      body.overwrite = true
-    }
-    const n = missionIdentity?.missionName?.trim()
-    const m = missionIdentity?.mapSuffix?.trim()
-    if (n && m) {
-      body.mission_name = n
-      body.map_suffix = m
-    }
+
+    // Fallback for browser-only mode where Electron IPC is unavailable.
     const response = await fetch(apiUrl('/api/build-mission-pbo'), {
       method: 'POST',
       headers: jsonHeaders,
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, stream: true }),
     })
     if (response.status === 409) {
       const data = (await response.json().catch(() => ({}))) as {
@@ -230,6 +416,19 @@ class Util {
   }
 
   static async revealPathInExplorer(path: string, projectPath?: string) {
+    const ipc = getElectronIpc()
+    if (ipc) {
+      const data = (await ipc.invoke('reveal-path', {
+        path,
+        project_path: projectPath ?? '',
+      })) as { ok?: boolean; error?: string }
+      if (!data?.ok) {
+        throw new Error(data?.error ?? 'Could not reveal path.')
+      }
+      return
+    }
+
+    // Fallback for browser-only mode where Electron IPC is unavailable.
     const response = await fetch(apiUrl('/api/reveal-path'), {
       method: 'POST',
       headers: jsonHeaders,

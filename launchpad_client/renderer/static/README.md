@@ -1,0 +1,1 @@
+### This directory is meant for static assets that are referenced in src! Not to be served lol

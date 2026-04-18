@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  closeRemoteSshSession,
+  fetchRemotePartialFileContents,
+  fetchRemoteRptFiles,
+  fetchSettings,
   fetchPartialFileContents,
   fetchRptFiles,
+  openRemoteSshSession,
+  type RemoteServerSettingsEntry,
   type RptFileEntry,
   type RptLogListLocation,
 } from '../api/launchpad'
@@ -45,6 +51,16 @@ function escapeRegex(text: string): string {
 
 export function LoggingPage() {
   const [logFolderKind, setLogFolderKind] = useState<RptLogListLocation>('profile')
+  const [remoteServers, setRemoteServers] = useState<RemoteServerSettingsEntry[]>([])
+  const [remoteServerId, setRemoteServerId] = useState('')
+  const [remoteFolder, setRemoteFolder] = useState('/home/steam/arma3')
+  const [remoteManualPath, setRemoteManualPath] = useState('')
+  const [remoteSessionId, setRemoteSessionId] = useState('')
+  const [remoteConnErr, setRemoteConnErr] = useState<string | null>(null)
+  const [remoteAuthDialogOpen, setRemoteAuthDialogOpen] = useState(false)
+  const [remotePasswordInput, setRemotePasswordInput] = useState('')
+  const [remotePassphraseInput, setRemotePassphraseInput] = useState('')
+  const [remoteConnectBusy, setRemoteConnectBusy] = useState(false)
   const [files, setFiles] = useState<RptFileEntry[]>([])
   const [folder, setFolder] = useState('')
   const [selectedPath, setSelectedPath] = useState('')
@@ -66,6 +82,10 @@ export function LoggingPage() {
     () => files.find((f) => f.path === selectedPath) ?? null,
     [files, selectedPath],
   )
+  const selectedRemoteServer = useMemo(
+    () => remoteServers.find((row) => row.id === remoteServerId) ?? null,
+    [remoteServers, remoteServerId],
+  )
 
   const atBottom = useCallback(() => {
     const el = logPaneRef.current
@@ -79,13 +99,51 @@ export function LoggingPage() {
     el.scrollTop = el.scrollHeight
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const settings = await fetchSettings()
+        if (cancelled) return
+        setRemoteServers(settings.remote_servers ?? [])
+        setRemoteServerId(settings.logs_remote_default_server_id ?? '')
+        setRemoteFolder(settings.logs_remote_default_folder || '/home/steam/arma3')
+      } catch {
+        if (cancelled) return
+        setRemoteServers([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (!remoteSessionId) return
+      void closeRemoteSshSession(remoteSessionId).catch(() => undefined)
+    }
+  }, [remoteSessionId])
+
+  useEffect(() => {
+    if (!remoteSessionId) return
+    void disconnectRemoteSession()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteServerId])
+
   const refreshList = useCallback(async (source: RptLogListLocation = logFolderKind) => {
     const reqId = listReqIdRef.current + 1
     listReqIdRef.current = reqId
     setLoadingList(true)
     setListErr(null)
     try {
-      const res = await fetchRptFiles(source)
+      if (source === 'remote' && !remoteSessionId) {
+        throw new Error('Connect to a remote server first.')
+      }
+      const res =
+        source === 'remote'
+          ? await fetchRemoteRptFiles(remoteSessionId, remoteFolder)
+          : await fetchRptFiles(source)
       if (listReqIdRef.current !== reqId) return
       setFiles(res.rpt_files)
       setFolder(res.folder)
@@ -101,7 +159,7 @@ export function LoggingPage() {
     } finally {
       if (listReqIdRef.current === reqId) setLoadingList(false)
     }
-  }, [selectedPath, logFolderKind])
+  }, [selectedPath, logFolderKind, remoteSessionId, remoteFolder])
 
   useEffect(() => {
     void refreshList()
@@ -118,7 +176,10 @@ export function LoggingPage() {
     try {
       const file = files.find((f) => f.path === selectedPath)
       const start = file ? Math.max(0, file.size - INITIAL_TAIL_BYTES) : 0
-      const res = await fetchPartialFileContents(selectedPath, start)
+      const res =
+        logFolderKind === 'remote'
+          ? await fetchRemotePartialFileContents(remoteSessionId, selectedPath, start, 'init')
+          : await fetchPartialFileContents(selectedPath, start)
       setTailText(trimLogBuffer(res.content))
       setCursor(res.end)
       setFileSize(res.file_size)
@@ -130,7 +191,7 @@ export function LoggingPage() {
       setCursor(0)
       setFileSize(0)
     }
-  }, [selectedPath, files, scrollToBottom])
+  }, [selectedPath, files, scrollToBottom, logFolderKind, remoteSessionId])
 
   useEffect(() => {
     void loadInitialTail()
@@ -139,7 +200,10 @@ export function LoggingPage() {
   const pollTail = useCallback(async () => {
     if (paused || !selectedPath) return
     try {
-      const res = await fetchPartialFileContents(selectedPath, cursor)
+      const res =
+        logFolderKind === 'remote'
+          ? await fetchRemotePartialFileContents(remoteSessionId, selectedPath, cursor, 'next')
+          : await fetchPartialFileContents(selectedPath, cursor)
       setFileSize(res.file_size)
       setLastPollTs(Date.now())
       if (res.file_size < cursor) {
@@ -160,7 +224,7 @@ export function LoggingPage() {
     } catch (e) {
       setTailErr(e instanceof Error ? e.message : 'Log tail polling failed')
     }
-  }, [paused, selectedPath, cursor, followTail, atBottom, scrollToBottom])
+  }, [paused, selectedPath, cursor, followTail, atBottom, scrollToBottom, logFolderKind, remoteSessionId])
 
   useEffect(() => {
     if (paused || !selectedPath) return
@@ -251,14 +315,74 @@ export function LoggingPage() {
     setTailErr(null)
   }
 
+  async function disconnectRemoteSession() {
+    if (!remoteSessionId) return
+    try {
+      await closeRemoteSshSession(remoteSessionId)
+    } catch {
+      /* ignore close errors */
+    }
+    setRemoteSessionId('')
+    setRemoteConnErr(null)
+    setFiles([])
+    setSelectedPath('')
+    setFolder('')
+    setTailText('')
+    setCursor(0)
+    setFileSize(0)
+  }
+
+  function requestRemoteConnect() {
+    if (!selectedRemoteServer) {
+      setRemoteConnErr('Select a remote server first.')
+      return
+    }
+    setRemoteConnErr(null)
+    setRemotePasswordInput('')
+    setRemotePassphraseInput('')
+    setRemoteAuthDialogOpen(true)
+  }
+
+  async function submitRemoteConnect() {
+    if (!selectedRemoteServer) {
+      setRemoteConnErr('Select a remote server first.')
+      setRemoteAuthDialogOpen(false)
+      return
+    }
+    setRemoteConnectBusy(true)
+    setRemoteConnErr(null)
+    try {
+      const opened = await openRemoteSshSession({
+        host: selectedRemoteServer.host,
+        port: selectedRemoteServer.port,
+        username: selectedRemoteServer.username,
+        auth: selectedRemoteServer.auth,
+        keyPath: selectedRemoteServer.keyPath,
+        password: selectedRemoteServer.auth === 'password' ? remotePasswordInput : undefined,
+        passphrase: selectedRemoteServer.auth === 'key' ? remotePassphraseInput : undefined,
+      })
+      setRemoteSessionId(opened.session_id)
+      setRemoteAuthDialogOpen(false)
+      setRemotePasswordInput('')
+      setRemotePassphraseInput('')
+      if (logFolderKind === 'remote') {
+        await refreshList('remote')
+      }
+    } catch (e) {
+      setRemoteConnErr(e instanceof Error ? e.message : 'Could not connect to the remote server.')
+    } finally {
+      setRemoteConnectBusy(false)
+    }
+  }
+
   return (
     <div className="page-stack logging-page">
-      <header className="page-header">
+      {/* <header className="page-header">
         <h1 className="page-title">Logs</h1>
         <p className="page-lead">
           Open an RPT from your game profile or from Arma 3 Tools and follow it live while things run.
         </p>
-      </header>
+      </header> */}
 
       <section className="card form-card">
         <div className="logging-source-row">
@@ -286,8 +410,64 @@ export function LoggingPage() {
             >
               Tools
             </button>
+            <button
+              type="button"
+              className={`logging-source-btn${logFolderKind === 'remote' ? ' is-active' : ''}`}
+              onClick={() => switchLogSource('remote')}
+              aria-pressed={logFolderKind === 'remote'}
+            >
+              Remote
+            </button>
           </div>
         </div>
+        {logFolderKind === 'remote' ? (
+          <div className="logging-toolbar">
+            <label className="field logging-file-select">
+              <span className="field-label">Remote server</span>
+              <select
+                className="field-input"
+                value={remoteServerId}
+                onChange={(e) => setRemoteServerId(e.target.value)}
+                disabled={remoteConnectBusy}
+              >
+                <option value="">Select a server</option>
+                {remoteServers.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.name} ({row.username}@{row.host}:{row.port})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field logging-file-select">
+              <span className="field-label">Remote folder</span>
+              <input
+                type="text"
+                className="field-input"
+                value={remoteFolder}
+                onChange={(e) => setRemoteFolder(e.target.value)}
+                spellCheck={false}
+              />
+            </label>
+            <div className="logging-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void (remoteSessionId ? disconnectRemoteSession() : requestRemoteConnect())}
+                disabled={remoteConnectBusy}
+              >
+                {remoteSessionId ? 'Disconnect' : 'Connect'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => void refreshList('remote')}
+                disabled={!remoteSessionId || loadingList}
+              >
+                Refresh remote files
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="logging-toolbar">
           <label className="field logging-file-select">
             <span className="field-label">RPT file</span>
@@ -323,6 +503,36 @@ export function LoggingPage() {
           </div>
         </div>
 
+        {logFolderKind === 'remote' ? (
+          <div className="logging-toolbar">
+            <label className="field logging-file-select">
+              <span className="field-label">Manual remote file path</span>
+              <input
+                className="field-input"
+                type="text"
+                value={remoteManualPath}
+                onChange={(e) => setRemoteManualPath(e.target.value)}
+                placeholder="/home/steam/arma3/server_console.rpt"
+                spellCheck={false}
+              />
+            </label>
+            <div className="logging-actions">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={!remoteSessionId || !remoteManualPath.trim()}
+                onClick={() => {
+                  const p = remoteManualPath.trim()
+                  if (!p) return
+                  setSelectedPath(p)
+                }}
+              >
+                Tail manual path
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {folder ? (
           <p className="field-hint">
             Source folder: <span className="shell-inline-code">{folder}</span>
@@ -339,6 +549,7 @@ export function LoggingPage() {
         ) : null}
 
         {loadingList ? <p className="card-body">Loading files…</p> : null}
+        {remoteConnErr ? <p className="form-banner form-banner-error" role="alert">{remoteConnErr}</p> : null}
         {listErr ? <p className="form-banner form-banner-error" role="alert">{listErr}</p> : null}
         {tailErr ? <p className="form-banner form-banner-error" role="alert">{tailErr}</p> : null}
 
@@ -455,6 +666,62 @@ export function LoggingPage() {
           </div>
         </div>
       </section>
+      {remoteAuthDialogOpen ? (
+        <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="remote-connect-title">
+          <button
+            type="button"
+            className="modal-backdrop"
+            aria-label="Close dialog"
+            onClick={() => !remoteConnectBusy && setRemoteAuthDialogOpen(false)}
+          />
+          <div className="modal-dialog">
+            <h2 id="remote-connect-title" className="card-title">
+              Connect remote server
+            </h2>
+            <p className="card-body" style={{ margin: 0 }}>
+              {selectedRemoteServer
+                ? `${selectedRemoteServer.username}@${selectedRemoteServer.host}:${selectedRemoteServer.port}`
+                : 'Selected server'}
+            </p>
+            {selectedRemoteServer?.auth === 'password' ? (
+              <label className="field" style={{ marginTop: 12 }}>
+                <span className="field-label">Password</span>
+                <input
+                  type="password"
+                  className="field-input"
+                  value={remotePasswordInput}
+                  onChange={(e) => setRemotePasswordInput(e.target.value)}
+                  autoComplete="current-password"
+                />
+              </label>
+            ) : (
+              <label className="field" style={{ marginTop: 12 }}>
+                <span className="field-label">Key passphrase (optional)</span>
+                <input
+                  type="password"
+                  className="field-input"
+                  value={remotePassphraseInput}
+                  onChange={(e) => setRemotePassphraseInput(e.target.value)}
+                  autoComplete="off"
+                />
+              </label>
+            )}
+            <div className="modal-actions" style={{ marginTop: 16 }}>
+              <button type="button" className="btn btn-primary" onClick={() => void submitRemoteConnect()} disabled={remoteConnectBusy}>
+                {remoteConnectBusy ? 'Connecting…' : 'Connect'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setRemoteAuthDialogOpen(false)}
+                disabled={remoteConnectBusy}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

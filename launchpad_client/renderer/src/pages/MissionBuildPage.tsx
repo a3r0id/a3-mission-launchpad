@@ -8,6 +8,8 @@ import {
 
 type MissionBuildPageProps = {
   onGoSettings?: () => void
+  embedded?: boolean
+  onBuilt?: (result: MissionBuildResponse) => void
 }
 
 type FormState = {
@@ -55,7 +57,7 @@ type SettingsGate =
   | { status: 'error'; message: string }
   | { status: 'ready'; data: LaunchpadSettings }
 
-export function MissionBuildPage({ onGoSettings }: MissionBuildPageProps) {
+export function MissionBuildPage({ onGoSettings, embedded = false, onBuilt }: MissionBuildPageProps) {
   const [form, setForm] = useState<FormState>(initial)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<MissionBuildResponse | null>(null)
@@ -126,18 +128,17 @@ export function MissionBuildPage({ onGoSettings }: MissionBuildPageProps) {
     setBusy(true)
     try {
       const payload = await fetchMissionBuild({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mission_name: form.mission_name.trim(),
-          map_suffix: form.map_suffix.trim(),
-          author: effectiveAuthor,
-          network_type: form.network_type,
-          generate_scripting_environment: form.generate_scripting_environment,
-          game_type: form.game_type,
-        }),
+        mission_name: form.mission_name.trim(),
+        map_suffix: form.map_suffix.trim(),
+        author: effectiveAuthor,
+        network_type: form.network_type,
+        generate_scripting_environment: form.generate_scripting_environment,
+        game_type: form.game_type,
       })
       setResult(payload)
+      if (payload.status === 0) {
+        onBuilt?.(payload)
+      }
     } catch (err) {
       setClientError(err instanceof Error ? err.message : 'Request failed')
     } finally {
@@ -147,15 +148,17 @@ export function MissionBuildPage({ onGoSettings }: MissionBuildPageProps) {
 
   return (
     <div className="page-stack">
-      <header className="page-header">
-        <h1 className="page-title">New Mission</h1>
-        <p className="page-lead">
-          Fill in the details below to create a new mission.
-        </p>
-      </header>
+      {!embedded ? (
+        <header className="page-header">
+          <h1 className="page-title">New Mission</h1>
+          <p className="page-lead">
+            Fill in the details below to create a new mission.
+          </p>
+        </header>
+      ) : null}
 
-      <form className="card form-card" onSubmit={onSubmit}>
-        <h2 className="card-title">Mission details</h2>
+      <form className={embedded ? 'form-card' : 'card form-card'} onSubmit={onSubmit} >
+        {/* <h2 className="card-title">Mission details</h2> */}
 
         {settingsGate.status === 'loading' && (
           <p className="card-body" role="status">
@@ -245,6 +248,7 @@ export function MissionBuildPage({ onGoSettings }: MissionBuildPageProps) {
         <label className="field">
           <div className="field-label-container">
             <span className="field-label">Generate Scripting Environment?</span>
+            <br />
             <input
               type="checkbox"
               className="field-input"
@@ -328,7 +332,7 @@ export function MissionBuildPage({ onGoSettings }: MissionBuildPageProps) {
 
       {result && (
         <section
-          className={`card result-card${result.status === 0 ? ' is-ok' : ' is-err'}`}
+          className={`${embedded ? '' : 'card '}result-card${result.status === 0 ? ' is-ok' : ' is-err'}`}
           aria-live="polite"
         >
           <h2 className="card-title">Response</h2>
