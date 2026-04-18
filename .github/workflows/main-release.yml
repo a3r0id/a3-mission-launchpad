@@ -204,6 +204,8 @@ jobs:
   #         github_token: ${{ secrets.GITHUB_TOKEN }}
   #         platform: windows
   #         architecture: x64
+  #         compare_base: ${{ github.event.before }}
+  #         compare_head: ${{ github.sha }}
 
   # publish-deliverables-linux:
   #   name: Build and publish Release (Linux x64)
@@ -223,3 +225,5 @@ jobs:
   #         github_token: ${{ secrets.GITHUB_TOKEN }}
   #         platform: linux
   #         architecture: x64
+  #         compare_base: ${{ github.event.before }}
+  #         compare_head: ${{ github.sha }}

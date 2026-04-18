@@ -1,5 +1,9 @@
 name: Publish deliverables
-description: Build release deliverables and upload installer assets to a release tag
+description: >-
+  Build release deliverables and upload installer assets to a release tag.
+  Optional scoped pre-checks: when both compare_base and compare_head are set (e.g. github.event.before and github.sha),
+  run CMake/CTest for the native extension, npm build for the renderer, vitest for the app, and a CMake build for a3hook
+  only if files under those paths changed. Use checkout fetch-depth 0 when passing commit SHAs.
 
 inputs:
   version:
@@ -15,6 +19,15 @@ inputs:
     description: Target architecture (x64)
     required: false
     default: x64
+  compare_base:
+    description: >-
+      Git ref or SHA for scoped pre-checks (with compare_head). Empty skips extension/renderer/app/a3hook pre-checks.
+    required: false
+    default: ""
+  compare_head:
+    description: Git ref or SHA for scoped pre-checks (with compare_base). Empty skips those pre-checks.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -36,14 +49,108 @@ runs:
       shell: bash
       run: python -m pip install --upgrade pip
 
+    - name: Detect changed paths for scoped pre-checks
+      id: paths
+      shell: bash
+      run: |
+        set -euo pipefail
+        extension=false
+        renderer=false
+        app=false
+        a3hook=false
+        base="${{ inputs.compare_base }}"
+        head="${{ inputs.compare_head }}"
+        if [ -z "$base" ] || [ -z "$head" ]; then
+          echo "scoped=false" >> "$GITHUB_OUTPUT"
+          echo "extension=$extension" >> "$GITHUB_OUTPUT"
+          echo "renderer=$renderer" >> "$GITHUB_OUTPUT"
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "a3hook=$a3hook" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if ! git rev-parse --verify "$base^{commit}" >/dev/null 2>&1; then
+          echo "::warning::compare_base not a valid commit: $base - skipping scoped pre-checks"
+          echo "scoped=false" >> "$GITHUB_OUTPUT"
+          echo "extension=$extension" >> "$GITHUB_OUTPUT"
+          echo "renderer=$renderer" >> "$GITHUB_OUTPUT"
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "a3hook=$a3hook" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if ! git rev-parse --verify "$head^{commit}" >/dev/null 2>&1; then
+          echo "::warning::compare_head not a valid commit: $head - skipping scoped pre-checks"
+          echo "scoped=false" >> "$GITHUB_OUTPUT"
+          echo "extension=$extension" >> "$GITHUB_OUTPUT"
+          echo "renderer=$renderer" >> "$GITHUB_OUTPUT"
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "a3hook=$a3hook" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        files=$(git diff --name-only "$base..$head" 2>/dev/null || true)
+        if echo "$files" | grep -qE '^launchpad_mod/extension/'; then extension=true; fi
+        if echo "$files" | grep -qE '^launchpad_client/renderer/'; then renderer=true; fi
+        if echo "$files" | grep -qE '^launchpad_client/app/'; then app=true; fi
+        if echo "$files" | grep -qE '^a3hook/'; then a3hook=true; fi
+        echo "scoped=true" >> "$GITHUB_OUTPUT"
+        echo "extension=$extension" >> "$GITHUB_OUTPUT"
+        echo "renderer=$renderer" >> "$GITHUB_OUTPUT"
+        echo "app=$app" >> "$GITHUB_OUTPUT"
+        echo "a3hook=$a3hook" >> "$GITHUB_OUTPUT"
+
+    - name: Install Linux build deps (extension pre-check)
+      if: ${{ steps.paths.outputs.extension == 'true' && runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends build-essential ninja-build cmake python3
+
+    - name: Pre-check extension (CMake + CTest)
+      if: ${{ steps.paths.outputs.extension == 'true' }}
+      shell: bash
+      working-directory: launchpad_mod/extension
+      run: |
+        set -euo pipefail
+        if command -v ninja >/dev/null 2>&1; then
+          cmake -B ci-build -G Ninja -S . -DCMAKE_BUILD_TYPE=Release
+        else
+          cmake -B ci-build -S . -DCMAKE_BUILD_TYPE=Release
+        fi
+        cmake --build ci-build --config Release --parallel
+        ctest --test-dir ci-build --output-on-failure --no-tests=error
+
+    - name: Pre-check a3hook (CMake build)
+      if: ${{ steps.paths.outputs.a3hook == 'true' }}
+      shell: bash
+      working-directory: a3hook
+      run: |
+        set -euo pipefail
+        if command -v ninja >/dev/null 2>&1; then
+          cmake -B ci-build -G Ninja -S . -DCMAKE_BUILD_TYPE=Release
+        else
+          cmake -B ci-build -S . -DCMAKE_BUILD_TYPE=Release
+        fi
+        cmake --build ci-build --config Release --parallel
+
     - name: Install renderer dependencies
       shell: bash
       run: npm ci
       working-directory: launchpad_client/renderer
 
+    - name: Pre-check renderer (tsc + Vite build)
+      if: ${{ steps.paths.outputs.renderer == 'true' }}
+      shell: bash
+      run: npm run build
+      working-directory: launchpad_client/renderer
+
     - name: Install app dependencies
       shell: bash
       run: npm ci
+      working-directory: launchpad_client/app
+
+    - name: Pre-check app (Vitest)
+      if: ${{ steps.paths.outputs.app == 'true' }}
+      shell: bash
+      run: npm test
       working-directory: launchpad_client/app
 
     - name: Build project deliverables

@@ -11,7 +11,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { TestingPage } from './pages/Testing'
 import { LoggingPage } from './pages/Logging'
 import { DebuggingPage } from './pages/Debugging'
-import './App.css'
+import './App.less'
 
 type NavId = 'home' | 'managed-missions' | 'managed-mod-projects' | 'testing' | 'debugging' | 'logging' | 'settings'
 

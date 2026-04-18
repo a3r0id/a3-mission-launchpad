@@ -52,6 +52,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@bis-toolkit/p3d": "^1.0.2",
     "electron-squirrel-startup": "^1.0.1",
     "node-ssh": "^13.2.1"
   }

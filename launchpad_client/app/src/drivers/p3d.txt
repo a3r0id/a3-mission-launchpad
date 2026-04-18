@@ -1,0 +1,270 @@
+Beginning
+Acknowledgments
+Legend
+Introduction
+File Format
+Toggle File Format subsection
+P3DHeader
+OdolExplorer
+MLOD_LOD
+Points
+FaceNormals
+Taggs
+TagNames
+#EndOfFile#
+#SharpEdges#
+#Property#
+#Mass# (only for Geometry LOD)
+#Animation#
+#UVSet# ARMA
+#Lock# (only used in O2)
+#Selected# (only used in O2)
+#Hide# (only used in O2)
+#MaterialIndex# (only in O2)
+P3D File Format - MLOD
+Page
+Read
+View source
+View history
+Categories: Real Virtuality File FormatsArmA: Armed Assault: File Formats
+bi symbol white.png
+Disclaimer: This page describes internal undocumented structures of Bohemia Interactive software.
+This page contains unofficial information.
+
+Some usage of this information may constitute a violation of the rights of Bohemia Interactive and is in no way endorsed or recommended by Bohemia Interactive.
+Bohemia Interactive is not willing to tolerate use of such tools if it contravenes any general licenses granted to end users of this community wiki or BI products.
+Acknowledgments
+This information comes largely from the long defunct 'ofpinternals', who in turn acknowledge
+
+Thanks to FlipeR (filipus@hotmail.com) for helping in research
+This is archive material is held at http:\\www.ofpec.com
+
+Legend
+see Generic FileFormat Data Types
+
+Introduction
+Any given P3D file is THE 3 dimensional model reference for a specific model. Tank, Man, House, sausage. The P3d contains references to pac/paa files which are individual 'surfaces' for *this* model. Some / Most / All of the pac/paa files *might* also be used in other models, but this p3d is THE T80 tank, THE civilian man, or THE tangerine sausage with pink spots.
+
+Arma P3D files also contain references to materials (rvmats).
+
+There are three basic P3D types
+
+DEMO: P3d's supplied for the 1977 demo of operation flashpoint.
+MLOD: An editable version as used by Oxygen2/3 eg.
+ODOL: A binarised and compressed version as used by various engines. (OFP, ARMA eg)
+This document describes MLOD and DEMO P3D's
+
+The FILE header (if present) defines which type of p3d this is.
+
+DEMO P3D's have no header, and a single lod.
+File headers were introduced at the launch of Operation Flashpoint to distinguish between binarised an unbinarised content. Prior to the launch, the p3d was, in effect, a single sp3 lod.
+Every LOD contains a LOD Header or Signature which defines the type of lod as being
+
+SP3D: Only used in Operation Flashpoint demo.
+SP3X: used in OFP and demo: Uses O2Light for editing
+P3DM used in ARMA:Uses O2PE for editing
+Arma can read SP3X and P3DM.
+
+Because each of the contiguous lods declares what 'type' it is (SP3X, or P3DM), architecturally, you could have mixtures of both types. Materials however, can only be defined by P3DM lods.
+
+Although the overall structure of a P3DM mlod model file is similar to SP3X mlod model files there are some notable differences. Namely, Materials, Multiple UVSets and Animations.
+
+File Format
+if MLOD_P3D
+{
+  P3DHeader P3DHeader;
+  MLOD_LOD  MLOD_LODs[Header.NoOfLods];
+  char      SP3X_DefaultPath[32]; // optional OFP only
+}
+//else a single sp3lod
+There is no header for demo p3d's instead they supply a single sp3x or sp3d lod in the standard manner.
+SP3X Lods contain a rarely encountered, optional, Default File path (probably for the editor)
+P3DHeader
+P3DHeader
+{
+ char   Signature[4];        //"MLOD"
+ ulong  Version;             // 0x101 see note
+ ulong  NoOfLods;            // at least one
+};
+OdolExplorer
+OdolExplorer sets the version to a float value of 1.1 with no ill-effect
+
+MLOD_LOD
+Struct
+{
+  char[4]                     Signature;           //"SP3X" or "P3DM" or "SP3D" (demo)
+  ============if NOT SP3D==========================
+  ulong                       MajorVersion;        //28 (x1C)
+  ulong                       MinorVersion;        //0x99 (SP3X) or 0x100 (P3DM)
+  ===============endif=============================
+  ulong                       NoOfPoints;
+  ulong                       NoOfFaceNormals;         //(perpendicular)
+  ulong                       NoOfFaces;
+  ============if NOT SP3D==========================
+  ulong                       UnknownFlagBits;     //Probably 'Model Flags' - Unused.
+  ===============endif=============================
+  Point                       Points[NoOfPoints];
+  XYZTriplet                  FaceNormals[NoOfFaceNormals];
+  LodFace                     LodFaces[NoOfFaces]; //see P3D Lod Faces
+  ============if NOT DEMO==========================
+  char                        TagSig;              //Always 'TAGG'
+  Tagg[]                      Taggs;               //Always, minimum of #EndOfFile# tag exists.
+  float                       Resolution;          //See P3D_Model_Info 
+  ===============endif=============================
+  ============if DEMO==========================
+            ****optional****
+  char                        SS3DSig;              //Always 'SS3D'
+  ulong                       nPoints
+  ulong                       nFaces
+  ulong                       nNormals              //identical counts to above
+  ulong                       nBytes
+  Bytes                       TinyBools[nPoints+nFaces+nNormals] // 0, or 1
+  ulong                       Indexes[nBytes/4]
+  NamedSelections             NamedSelections[until eof] // optional            
+  ===============endif=============================
+}
+The end of each lod *always* contains an #EndOfFile# TAGG followed by the resolution (of that lod)
+Demo Lods contain an optional SS3D structure
+Demo Lod named selections (optional)
+{
+  char Name[32]; // "velka_vitrule"
+  Bytes    Undecoded[...];
+}.....
+the above structure is repeated for an indeterminate number of 'names'
+
+
+
+Points
+struct
+{
+   XYZTriplet    Position
+   if NOT SP3D
+   ulong         PointFlags;// see P3D Point and Face Flags
+   endif
+}
+FaceNormals
+Each LodFace contains index values into the FaceNormals Table. There are generally as many Normals Triplets, as there are index entries in LodFaces.
+
+Because of the varying number of faces in the face table (eg 3 or 4)
+
+NoOfFaceNormals (= nNormalsTriplets) = 3*LodFaces.NoOfTriangles + 4*LodFaces.NoOfQuads
+Generally.
+
+
+
+FaceNormals must be inverted (-X, -Y, -Z) for clockwise vertex order (default for DirectX), and not changed for counterclockwise order.
+Taggs
+Taggs do not exist for DEMO p3ds, neither SP3X nor SP3D
+ struct
+ {
+   //////// P3DM ONLY ///////////
+   TinyBool Active;            // always 1
+   Asciiz   TaggName;          // "#EndOfFile#\0" eg
+   ///////  SP3X ONLY ///////////
+   Asciiz   TaggName[64];      // "#EndOfFile#\0" eg
+   //////////////////////////////
+   ulong    NoOfBytes;         // offset to next tagg
+   byte     TaggData[NoOfBytes];// arbitrary data
+ };
+TagNames
+Every Lod contains one or more Tagname entries. The #EndOfFile# tag is a mandatory entry in every Lod to indicate no more tags! The contiguous tags that make up the tag section are always in the above format. The actual structure of the 'ArbitraryData' is dependant on the TagName.
+
+TaggNames consist of a mixure of pre-defined Taggs indicated with #.....# marks, and 'Named Selections'
+
+Named Selection tagg names can contain Proxy names beginning with 'proxy:' + ProxyName + '.' + ProxyNumber ('01' ...
+
+Every Lod has an #EndOfFile# Tagg
+Every Arma Lod has at least one #UVSet# Tagg. The first of which is a duplicate of that found in LodFaces. (ofp has no #UVset# because there is only ever one)
+The #Mass# tag is mandatory for Geometry LODs and only present in Geometry LODs.
+
+Tagg names listed below are a mish mash of obsolete, and still used, commands. This because, the p3d was a still in development at time of CWC release.
+
+
+
+#EndOfFile#
+ulong   NoOfBytes; //always 0
+Mandatory for every Lod. This is the last tag of current LOD. It contains no data.
+
+#SharpEdges#
+ulong          NoOfBytes;
+ulong          PointsIndex[NoOfIndexes][2]; // NoOfIndexes= NoOfBytes /  2 * sizeof(ulong)..// 1st and 2nd indexes into the VertexTable 
+Sharp edge means that these vertices normals are not calculated as average (normalized) between polygons.
+
+#Property#
+ ulong                      NoOfBytes;            //Always 128
+ Asciiz                     TokenKey[64];         //"lodnoshadow" (=) "1"
+ Asciiz                     TokenValue[64];       //
+Additional Properties (if any) for the lod are contained in a series of one or more property tags. Each one contains one, and one only Token-Pair. The Asciiz strings each have a fixed length of 64 characters. Regardless, they are null terminated.
+
+Examples:
+
+damage=tree;
+CanOcclude=0;
+#Mass# (only for Geometry LOD)
+ulong          NoOfBytes;
+float          PointsMass[NoOfPoints];  // == NoOfBytes / sizeof(float).. same as Lod.NoOfPoints
+Must be present for Geometry LOD, and only for Geometry lod. It refers to the mass of each Point entry.
+
+#Animation#
+see P3D Lod Frames
+
+#UVSet# ARMA
+ulong       NoOfBytes;                   //see below
+ulong       ID;
+UVPair      FaceUV[NoOfFaces][FaceType]; //see P3D Lod Faces
+Introduced for Arma to supply up to 8 distinct #UVset#s per lod.
+
+There is at least one (and generally only one) #UVSet# for every lod.
+This #UVSet# (ID=0) is a redundant duplication of that found in Lodfaces.
+
+There is a slight re-arrangement of the UV array in the UVset vs that found in LodFaces. The amount of data however, is identical. (And in the case of uvset0, the data is identical).
+
+note that 'identical' floating point values are rare because the IEEE represention of any given value is a range of precisions. The value 0.02 eg cannot be represented exactly, as a float (or double for that matter).
+
+The following code compares, in a general sense, two floats for 'identicalness'
+
+bool AlmostEqual(float A, float B)
+{
+   if (A == B)  return true; // gets over neg and positive zero
+   return abs(*(int*)&A - *(int*)&B)==0; // gets around nans' qnans
+}
+For a very, very good article on this subject http://www.cygnus-software.com/papers/comparingfloats/comparingfloats.htm
+
+A UVpair matches each vertex in every LodFace
+
+LodFaces themselves can have either 3, or 4, UVPairs per index. Thus, the amount of data in this structure varies.
+
+The number of bytes therefore used by this #UVset and every other UVset in this lod is calculated as
+
+sizeof(ulong)+ sizeof(UVPair)* (3*LodFace.NoOfTriangles+4*LodFace.NoOfQuads)
+#Lock# (only used in O2)
+#Selected# (only used in O2)
+#Hide# (only used in O2)
+ulong      NoOfBytes;                  // ==Lod.NoOfPoints + lod.NoOfFaces
+TinyBool   PointsIndex[NoOfPoints];    // nonzero = true
+TinyBool   FaceIndex[NoOfFaces];
+These 3 are used so that O2 can save your last selections in the edited file. They serve no other purpose outside of editing the model in O2.
+
+These table correspond to each entry of Points and Faces respectively and indicate whether that Point (or Face) at that index is 'selected/locked/hidden' or not and is a a persisted selection within the P3DM at this time.
+
+The values are supposed to be 0 and 1. This is mostly the case, however, some 'bytes' contain values such as 2 or 6, but also mean, 'true'
+
+
+
+#MaterialIndex# (only in O2)
+Used only in O2. Possibly Operation Flashpoint only.
+
+material properties
+
+{
+ RGBA diffuse; //default  51, 75, 55, 0 
+ RGBA ambient  // Default 0
+ RGBA specular // Default -1
+ RGBA emissive // Default -1
+}nBytes/4;
+only seen these in clusters of 4x4 They appear to be set for all lods if present at all Each lod appears to have identical info
+
+Categories: Real Virtuality File FormatsArmA: Armed Assault: File Formats
+This page was last edited on 8 May 2025, at 13:27.
+Privacy policyAbout Bohemia Interactive CommunityDisclaimers
+Powered by MediaWiki

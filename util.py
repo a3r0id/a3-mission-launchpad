@@ -25,6 +25,7 @@ REPO = Path(__file__).resolve().parent
 A3 = REPO / "A3LaunchPad"
 CLIENT_DIST = REPO / "launchpad_client" / "renderer" / "dist"
 EXT_ROOT = REPO / "launchpad_mod" / "extension"
+A3HOOK_ROOT = REPO / "a3hook"
 ADDON_PBO_NAME = "a3_launchpad_ext_main.pbo"
 HEMTT_BUILD_ADDONS = REPO / "launchpad_mod" / ".hemttout" / "build" / "addons"
 APP_DIR = REPO / "launchpad_client" / "app"
@@ -258,6 +259,18 @@ def stage_electron_app() -> None:
         print(f"Note: could not remove temporary {electron_out}.", file=sys.stderr)
 
 
+def _cmake_configure_and_build(*, source_dir: Path, build_dir: Path) -> None:
+    """Same pattern as the Arma extension: ``cmake -B build -S source`` from repo root."""
+    configure = ["cmake", "-B", str(build_dir), "-S", str(source_dir)]
+    if sys.platform != "win32":
+        configure += ["-DCMAKE_BUILD_TYPE=Release"]
+    subprocess.run(configure, cwd=str(REPO), check=True)
+    build_cmd = ["cmake", "--build", str(build_dir), "--parallel"]
+    if sys.platform == "win32":
+        build_cmd += ["--config", "Release"]
+    subprocess.run(build_cmd, cwd=str(REPO), check=True)
+
+
 def _find_extension_binary() -> Path | None:
     names = ("A3_LAUNCHPAD_EXT_x64.dll",) if os.name == "nt" else ("A3_LAUNCHPAD_EXT_x64.so",)
     search_roots = (
@@ -269,6 +282,26 @@ def _find_extension_binary() -> Path | None:
         REPO / "launchpad_mod" / "bin" / "mod",
         A3,
         A3 / "mod",
+    )
+    for root in search_roots:
+        if not root.is_dir():
+            continue
+        for name in names:
+            p = root / name
+            if p.is_file():
+                return p
+    return None
+
+
+def _find_a3hook_binary() -> Path | None:
+    names = ("a3hook.exe",) if os.name == "nt" else ("a3hook",)
+    hook_build = A3HOOK_ROOT / "build"
+    search_roots = (
+        hook_build / "Release",
+        hook_build / "RelWithDebInfo",
+        hook_build / "Debug",
+        hook_build,
+        A3,
     )
     for root in search_roots:
         if not root.is_dir():
@@ -319,6 +352,18 @@ def stage_mod_deliverables() -> None:
             file=sys.stderr,
         )
 
+    hook = _find_a3hook_binary()
+    if hook is not None:
+        hook_dest = "a3hook.exe" if os.name == "nt" else "a3hook"
+        a3_root.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(hook, a3_root / hook_dest)
+        print(f"Staged a3hook: {hook.name} -> {a3_root / hook_dest}")
+    else:
+        print(
+            "Warning: a3hook executable not found. Build the CMake target in a3hook first.",
+            file=sys.stderr,
+        )
+
     pbo_src = _find_addon_pbo()
     dest_pbo = addons_dir / ADDON_PBO_NAME
     loose_dir = addons_dir / "a3_launchpad_ext_main"
@@ -348,6 +393,7 @@ def run_build(*, rebuild_pbo: bool = False) -> None:
     mod_root = REPO / "launchpad_mod"
     ext_dir = mod_root / "extension"
     ext_build = ext_dir / "build"
+    hook_build = A3HOOK_ROOT / "build"
 
     # Temp publish workspaces omit node_modules; install before tsc/vite.
     if not (renderer / "node_modules").is_dir():
@@ -356,15 +402,8 @@ def run_build(*, rebuild_pbo: bool = False) -> None:
 
     _run_npm(["run", "build"], renderer)
 
-    configure = ["cmake", "-B", str(ext_build), "-S", str(ext_dir)]
-    if sys.platform != "win32":
-        configure += ["-DCMAKE_BUILD_TYPE=Release"]
-    subprocess.run(configure, cwd=str(REPO), check=True)
-
-    build_cmd = ["cmake", "--build", str(ext_build), "--parallel"]
-    if sys.platform == "win32":
-        build_cmd += ["--config", "Release"]
-    subprocess.run(build_cmd, cwd=str(REPO), check=True)
+    _cmake_configure_and_build(source_dir=ext_dir, build_dir=ext_build)
+    _cmake_configure_and_build(source_dir=A3HOOK_ROOT, build_dir=hook_build)
 
     require_hemtt_env = os.environ.get("LAUNCHPAD_REQUIRE_HEMTT", "0") == "1"
     hemtt = shutil.which("hemtt")
@@ -394,7 +433,7 @@ def run_build(*, rebuild_pbo: bool = False) -> None:
     stage_electron_app()
     print(
         f"Build complete: web UI in {A3 / 'web_dist'}, "
-        f"companion mod under {A3 / 'mod'}, native extension on {A3}, Electron under {A3 / 'app'}"
+        f"companion mod under {A3 / 'mod'}, native binaries on {A3}, Electron under {A3 / 'app'}"
     )
 
 

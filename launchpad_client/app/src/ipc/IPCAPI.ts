@@ -62,6 +62,8 @@ import {
     handleDebugServerStatus,
     handleDebugServerStop,
 } from './handlers/handleDebugSocket';
+import { handleDecodePAA } from './handlers/handleDecodePAA';
+import { handleGetP3dPreviewMesh } from './handlers/handleGetP3dPreviewMesh';
 
 export type PredefinedIPC = 
 | 'mission-build' 
@@ -117,6 +119,8 @@ export type PredefinedIPC =
 | 'debug-server-stop'
 | 'debug-server-status'
 | 'debug-command-send'
+| 'decode-paa'
+| 'get-p3d-preview-mesh'
 
 export class IPCAPI {
     private ctx: Launchpad;
@@ -334,6 +338,10 @@ export class IPCAPI {
         );
         this.registerIPC('debug-command-send', (event, args) =>
             handleDebugCommandSend(this.ctx, event, args)
+        );
+        this.registerIPC('decode-paa', (event, args) => handleDecodePAA(this.ctx, event, args));
+        this.registerIPC('get-p3d-preview-mesh', (event, args) =>
+            handleGetP3dPreviewMesh(this.ctx, event, args),
         );
     }
     public registerIPC(

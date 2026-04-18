@@ -3,7 +3,9 @@ import Editor from '@monaco-editor/react'
 import type { OnMount } from '@monaco-editor/react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faFileCirclePlus, faPen } from '@fortawesome/free-solid-svg-icons'
-import { fetchMissionProjectTree, type ProjectTreeNode } from '../api/launchpad'
+import { decodePaaFromPath, fetchMissionProjectTree, getP3dPreviewMeshFromPath, type ProjectTreeNode } from '../api/launchpad'
+import { ImagePreview } from './ImagePreview.tsx'
+import { P3dPreview } from './P3dPreview.tsx'
 import { Spinner } from './Spinner'
 import { useAppPreferences } from '../context/AppPreferencesContext'
 import {
@@ -19,6 +21,11 @@ function joinProjectPath(root: string, relPosix: string): string {
   const win = root.includes('\\')
   const parts = relPosix.split('/').filter(Boolean)
   return win ? [base, ...parts].join('\\') : [base, ...parts].join('/')
+}
+
+function dirnameAbs(absPath: string): string {
+  const i = Math.max(absPath.lastIndexOf('/'), absPath.lastIndexOf('\\'))
+  return i <= 0 ? absPath : absPath.slice(0, i)
 }
 
 function normalizePathKey(p: string): string {
@@ -139,6 +146,14 @@ function fileBasename(relPosix: string): string {
   return parts.length ? parts[parts.length - 1]! : relPosix
 }
 
+function isPaaRel(relPosix: string): boolean {
+  return fileBasename(relPosix).toLowerCase().endsWith('.paa')
+}
+
+function isP3dRel(relPosix: string): boolean {
+  return fileBasename(relPosix).toLowerCase().endsWith('.p3d')
+}
+
 /** Single path segment only (no folders in the name field). */
 function sanitizeFileLabel(raw: string): string | null {
   const t = raw.trim()
@@ -176,6 +191,7 @@ function TreeBranch({
   expanded,
   toggle,
   selectedRel,
+  busyFileRel,
   onSelectFile,
   disabled,
   onRequestNewFile,
@@ -186,6 +202,8 @@ function TreeBranch({
   expanded: Set<string>
   toggle: (rel: string) => void
   selectedRel: string | null
+  /** When set, show a small spinner on that file row (e.g. while a texture preview is loading). */
+  busyFileRel: string | null
   onSelectFile: (rel: string) => void
   disabled?: boolean
   onRequestNewFile: (dirRel: string) => void
@@ -234,6 +252,11 @@ function TreeBranch({
             <span className="mission-tree-toggle mission-tree-toggle-spacer" aria-hidden />
             <span className="mission-tree-icon mission-tree-icon-file" aria-hidden />
             <span className="mission-tree-name">{node.name}</span>
+            {busyFileRel === rel ? (
+              <span className="mission-tree-busy" aria-hidden>
+                <Spinner size={14} color="var(--text-muted)" />
+              </span>
+            ) : null}
             {node.size != null ? <span className="mission-tree-meta">{formatSize(node.size)}</span> : null}
           </button>
           {!disabled ? (
@@ -258,6 +281,7 @@ function TreeBranch({
               expanded={expanded}
               toggle={toggle}
               selectedRel={selectedRel}
+              busyFileRel={busyFileRel}
               onSelectFile={onSelectFile}
               disabled={disabled}
               onRequestNewFile={onRequestNewFile}
@@ -287,6 +311,19 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
   const [selectedRel, setSelectedRel] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState('')
   const [fileLoading, setFileLoading] = useState(false)
+  const [texturePreview, setTexturePreview] = useState<{
+    width: number
+    height: number
+    data: Uint8Array
+  } | null>(null)
+  const [meshPreview, setMeshPreview] = useState<{
+    positions: Float32Array
+    indices: Uint32Array
+    normals: Float32Array
+    uvs: Float32Array | null
+    textureNames: string[]
+    modelDirectory: string
+  } | null>(null)
   const [fileErr, setFileErr] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [savingFile, setSavingFile] = useState(false)
@@ -327,6 +364,8 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
     setTree(null)
     setSelectedRel(null)
     setFileContent('')
+    setTexturePreview(null)
+    setMeshPreview(null)
     setDirty(false)
     try {
       const res = await fetchMissionProjectTree(projectRoot)
@@ -460,12 +499,47 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
       setFileErr(null)
       setFileLoading(true)
       setDirty(false)
+      setTexturePreview(null)
+      setMeshPreview(null)
       const abs = joinProjectPath(projectRoot, rel)
+      const paa = isPaaRel(rel)
+      const p3d = isP3dRel(rel)
       try {
-        const text = await Util.getFileContents(abs)
-        setFileContent(text)
+        if (paa) {
+          const r = await decodePaaFromPath(abs)
+          if (r.ok === true) {
+            setTexturePreview({ width: r.width, height: r.height, data: r.data })
+            setFileContent('')
+          } else {
+            setFileContent('')
+            setFileErr(r.error)
+            return
+          }
+        } else if (p3d) {
+          const r = await getP3dPreviewMeshFromPath(abs)
+          if (r.ok === true) {
+            setMeshPreview({
+              positions: r.positions,
+              indices: r.indices,
+              normals: r.normals,
+              uvs: r.uvs,
+              textureNames: r.textureNames,
+              modelDirectory: dirnameAbs(abs),
+            })
+            setFileContent('')
+          } else {
+            setFileContent('')
+            setFileErr(r.error)
+            return
+          }
+        } else {
+          const text = await Util.getFileContents(abs)
+          setFileContent(text)
+        }
       } catch (e) {
         setFileContent('')
+        setTexturePreview(null)
+        setMeshPreview(null)
         setFileErr(e instanceof Error ? e.message : 'Could not read file')
       } finally {
         setFileLoading(false)
@@ -537,6 +611,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
 
   useEffect(() => {
     if (fileLoading || !monacoReady || !selectedRel) return
+    if (isPaaRel(selectedRel) || isP3dRel(selectedRel)) return
     const j = jumpTargetRef.current
     if (!j || j.rel !== selectedRel) return
     jumpTargetRef.current = null
@@ -558,6 +633,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
 
   useEffect(() => {
     if (environment !== 'mod' || !selectedRel || fileLoading || disabled) return
+    if (isPaaRel(selectedRel) || isP3dRel(selectedRel)) return
     if (lintDebounceRef.current) clearTimeout(lintDebounceRef.current)
     lintDebounceRef.current = setTimeout(() => {
       lintDebounceRef.current = null
@@ -599,6 +675,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
 
   useEffect(() => {
     if (environment !== 'mod') return
+    if (selectedRel && (isPaaRel(selectedRel) || isP3dRel(selectedRel))) return
     applyHemttMarkers(monacoShellRef.current, projectRoot, selectedRel, lintDiagnostics)
   }, [environment, projectRoot, selectedRel, lintDiagnostics])
 
@@ -626,6 +703,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
 
   async function saveFile() {
     if (!selectedRel) return
+    if (isPaaRel(selectedRel) || isP3dRel(selectedRel)) return
     setSavingFile(true)
     setFileErr(null)
     const abs = joinProjectPath(projectRoot, selectedRel)
@@ -755,6 +833,11 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                 expanded={expanded}
                 toggle={toggle}
                 selectedRel={selectedRel}
+                busyFileRel={
+                  fileLoading && selectedRel && (isPaaRel(selectedRel) || isP3dRel(selectedRel))
+                    ? selectedRel
+                    : null
+                }
                 onSelectFile={(rel) => void openFile(rel)}
                 disabled={disabled}
                 onRequestNewFile={beginNewFile}
@@ -790,7 +873,14 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
-                    disabled={disabled || savingFile || fileLoading || !dirty}
+                    disabled={
+                      disabled ||
+                      savingFile ||
+                      fileLoading ||
+                      !dirty ||
+                      texturePreview != null ||
+                      meshPreview != null
+                    }
                     onClick={() => void saveFile()}
                   >
                     {savingFile ? 'Saving…' : 'Save file'}
@@ -802,12 +892,54 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                   {fileErr}
                 </p>
               ) : null}
-              {fileLoading || !monacoReady ? (
+              {fileLoading ? (
                 <div className="mission-resource-loading mission-resource-loading-inline">
                   <div className="mission-resource-loading-bar" />
                   <p className="mission-resource-loading-text">
-                    {!monacoReady ? 'Preparing editor…' : 'Loading file…'}
+                    {selectedRel && (isPaaRel(selectedRel) || isP3dRel(selectedRel))
+                      ? 'Loading preview…'
+                      : 'Loading file…'}
                   </p>
+                </div>
+              ) : selectedRel && isPaaRel(selectedRel) ? (
+                texturePreview ? (
+                  <div className="mission-resource-editor-editor-stack mission-resource-editor-editor-stack--image">
+                    <ImagePreview
+                      width={texturePreview.width}
+                      height={texturePreview.height}
+                      rgba={texturePreview.data}
+                    />
+                  </div>
+                ) : (
+                  <div className="mission-resource-placeholder mission-resource-preview-fallback">
+                    <p className="mission-resource-placeholder-text">
+                      {fileErr ? 'Preview is not available for this file.' : '\u00a0'}
+                    </p>
+                  </div>
+                )
+              ) : selectedRel && isP3dRel(selectedRel) ? (
+                meshPreview ? (
+                  <div className="mission-resource-editor-editor-stack mission-resource-editor-editor-stack--mesh">
+                    <P3dPreview
+                      positions={meshPreview.positions}
+                      indices={meshPreview.indices}
+                      normals={meshPreview.normals}
+                      uvs={meshPreview.uvs}
+                      textureNames={meshPreview.textureNames}
+                      modelDirectory={meshPreview.modelDirectory}
+                    />
+                  </div>
+                ) : (
+                  <div className="mission-resource-placeholder mission-resource-preview-fallback">
+                    <p className="mission-resource-placeholder-text">
+                      {fileErr ? 'Preview is not available for this file.' : '\u00a0'}
+                    </p>
+                  </div>
+                )
+              ) : !monacoReady ? (
+                <div className="mission-resource-loading mission-resource-loading-inline">
+                  <div className="mission-resource-loading-bar" />
+                  <p className="mission-resource-loading-text">Preparing editor…</p>
                 </div>
               ) : (
                 <div className="mission-resource-editor-editor-stack">

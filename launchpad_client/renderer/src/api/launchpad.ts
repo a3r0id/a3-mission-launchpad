@@ -1521,6 +1521,153 @@ export async function fetchPartialFileContents(
   return row
 }
 
+export type DecodePaaFromPathResult =
+  | { ok: true; width: number; height: number; data: Uint8Array }
+  | { ok: false; error: string }
+
+function coerceBinaryPayload(data: unknown): Uint8Array | null {
+  if (data instanceof Uint8Array) {
+    return data
+  }
+  if (data instanceof ArrayBuffer) {
+    return new Uint8Array(data)
+  }
+  if (data && typeof data === 'object' && ArrayBuffer.isView(data)) {
+    const v = data as ArrayBufferView
+    return new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
+  }
+  return null
+}
+
+/** Decode a ``.paa`` on disk to RGBA8888 (desktop shell only). */
+export async function decodePaaFromPath(absPath: string): Promise<DecodePaaFromPathResult> {
+  const ipc = getElectronIpc()
+  if (!ipc) {
+    return { ok: false, error: 'Texture preview is only available in the desktop app.' }
+  }
+  const raw = (await ipc.invoke('decode-paa', { path: absPath })) as {
+    ok?: boolean
+    error?: string
+    width?: number
+    height?: number
+    data?: unknown
+  } | null
+  if (!raw || typeof raw !== 'object') {
+    return { ok: false, error: 'Invalid response from desktop API.' }
+  }
+  if (raw.ok !== true) {
+    const err =
+      typeof raw.error === 'string' && raw.error.trim() ? raw.error.trim() : 'Could not decode texture.'
+    return { ok: false, error: err }
+  }
+  const w = raw.width
+  const h = raw.height
+  if (typeof w !== 'number' || typeof h !== 'number' || !Number.isFinite(w) || !Number.isFinite(h) || w < 1 || h < 1) {
+    return { ok: false, error: 'Could not decode texture.' }
+  }
+  const u8 = coerceBinaryPayload(raw.data)
+  const expected = Math.floor(w) * Math.floor(h) * 4
+  if (!u8 || u8.byteLength !== expected) {
+    return { ok: false, error: 'Could not decode texture.' }
+  }
+  return { ok: true, width: Math.floor(w), height: Math.floor(h), data: u8 }
+}
+
+export type GetP3dPreviewMeshFromPathResult =
+  | {
+      ok: true
+      lodIndex: number
+      vertexCount: number
+      triangleCount: number
+      positions: Float32Array
+      indices: Uint32Array
+      normals: Float32Array
+      uvs: Float32Array | null
+      primaryTexture: string | null
+      textureNames: string[]
+    }
+  | { ok: false; error: string }
+
+/** Load a ``.p3d`` mesh for the model preview (desktop shell only). */
+export async function getP3dPreviewMeshFromPath(absPath: string): Promise<GetP3dPreviewMeshFromPathResult> {
+  const ipc = getElectronIpc()
+  if (!ipc) {
+    return { ok: false, error: 'Model preview is only available in the desktop app.' }
+  }
+  const raw = (await ipc.invoke('get-p3d-preview-mesh', { path: absPath })) as {
+    ok?: boolean
+    error?: string
+    lodIndex?: number
+    vertexCount?: number
+    triangleCount?: number
+    positions?: unknown
+    indices?: unknown
+    normals?: unknown
+    uvs?: unknown
+    primaryTexture?: unknown
+    textureNames?: unknown
+  } | null
+  if (!raw || typeof raw !== 'object') {
+    return { ok: false, error: 'Invalid response from desktop API.' }
+  }
+  if (raw.ok !== true) {
+    const err =
+      typeof raw.error === 'string' && raw.error.trim() ? raw.error.trim() : 'This model could not be previewed.'
+    return { ok: false, error: err }
+  }
+  const vc = raw.vertexCount
+  const tc = raw.triangleCount
+  const li = raw.lodIndex
+  if (
+    typeof vc !== 'number' ||
+    typeof tc !== 'number' ||
+    typeof li !== 'number' ||
+    !Number.isFinite(vc) ||
+    !Number.isFinite(tc) ||
+    !Number.isFinite(li) ||
+    vc < 1 ||
+    tc < 1
+  ) {
+    return { ok: false, error: 'This model could not be previewed.' }
+  }
+  const posBuf = coerceBinaryPayload(raw.positions)
+  const idxBuf = coerceBinaryPayload(raw.indices)
+  const nrmBuf = coerceBinaryPayload(raw.normals)
+  const vCount = Math.floor(vc)
+  const tCount = Math.floor(tc)
+  const posNeed = vCount * 12
+  const idxNeed = tCount * 12
+  const nrmNeed = vCount * 12
+  if (!posBuf || posBuf.byteLength !== posNeed || !idxBuf || idxBuf.byteLength !== idxNeed || !nrmBuf || nrmBuf.byteLength !== nrmNeed) {
+    return { ok: false, error: 'This model could not be previewed.' }
+  }
+  const uvBuf = coerceBinaryPayload(raw.uvs)
+  const uvNeed = vCount * 8
+  const uvs =
+    uvBuf && uvBuf.byteLength === uvNeed ? new Float32Array(uvBuf.buffer, uvBuf.byteOffset, vCount * 2) : null
+
+  let textureNames: string[] = []
+  if (Array.isArray(raw.textureNames)) {
+    textureNames = raw.textureNames.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+  }
+  const pt =
+    typeof raw.primaryTexture === 'string' && raw.primaryTexture.trim() ? raw.primaryTexture.trim() : null
+  const primaryTexture = pt ?? textureNames[0] ?? null
+
+  return {
+    ok: true,
+    lodIndex: Math.floor(li),
+    vertexCount: vCount,
+    triangleCount: tCount,
+    positions: new Float32Array(posBuf.buffer, posBuf.byteOffset, vCount * 3),
+    indices: new Uint32Array(idxBuf.buffer, idxBuf.byteOffset, tCount * 3),
+    normals: new Float32Array(nrmBuf.buffer, nrmBuf.byteOffset, vCount * 3),
+    uvs,
+    primaryTexture,
+    textureNames,
+  }
+}
+
 export async function checkBackendReachable(): Promise<boolean> {
   return getElectronIpc() !== null
 }
