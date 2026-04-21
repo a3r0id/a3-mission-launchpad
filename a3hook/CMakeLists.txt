@@ -7,7 +7,7 @@ endif()
 project(A3_HOOK)
 
 # Standalone command-line tool (not an Arma extension module).
-add_executable(A3_HOOK "s3hook.cpp")
+add_executable(A3_HOOK "a3hook.cpp")
 
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
 	message(FATAL_ERROR "Only 64-bit builds are supported")

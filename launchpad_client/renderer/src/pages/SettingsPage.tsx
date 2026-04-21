@@ -28,6 +28,7 @@ function trimField(v: string | undefined | null): string {
 /** Matches an empty form before any successful load (used so Save still works if load failed). */
 const EMPTY_SETTINGS_BASELINE: LaunchpadSettings = {
   arma3_path: '',
+  arma3_workshop_path: '',
   arma3_tools_path: '',
   arma3_profile_path: '',
   arma3_appdata_path: '',
@@ -51,6 +52,7 @@ function sameSettings(a: LaunchpadSettings, b: LaunchpadSettings) {
     }))
   return (
     a.arma3_path === b.arma3_path &&
+    a.arma3_workshop_path === b.arma3_workshop_path &&
     a.arma3_tools_path === b.arma3_tools_path &&
     a.arma3_profile_path === b.arma3_profile_path &&
     a.arma3_appdata_path === b.arma3_appdata_path &&
@@ -72,6 +74,7 @@ function newRemoteServerId(): string {
 export function SettingsPage() {
   const [saved, setSaved] = useState<LaunchpadSettings | null>(null)
   const [arma3Path, setArma3Path] = useState('')
+  const [arma3WorkshopPath, setArma3WorkshopPath] = useState('')
   const [toolsPath, setToolsPath] = useState('')
   const [profilePath, setProfilePath] = useState('')
   const [appdataPath, setAppdataPath] = useState('')
@@ -101,6 +104,7 @@ export function SettingsPage() {
 
   const draft: LaunchpadSettings = {
     arma3_path: trimField(arma3Path),
+    arma3_workshop_path: trimField(arma3WorkshopPath),
     arma3_tools_path: trimField(toolsPath),
     arma3_profile_path: trimField(profilePath),
     arma3_appdata_path: trimField(appdataPath),
@@ -121,6 +125,7 @@ export function SettingsPage() {
       const s = await fetchSettings()
       setSaved(s)
       setArma3Path(s.arma3_path ?? '')
+      setArma3WorkshopPath(s.arma3_workshop_path ?? '')
       setToolsPath(s.arma3_tools_path ?? '')
       setProfilePath(s.arma3_profile_path ?? '')
       setAppdataPath(s.arma3_appdata_path ?? '')
@@ -148,6 +153,7 @@ export function SettingsPage() {
     try {
       const res = await updateSettings({
         arma3_path: trimField(arma3Path),
+        arma3_workshop_path: trimField(arma3WorkshopPath),
         arma3_tools_path: trimField(toolsPath),
         arma3_profile_path: trimField(profilePath),
         arma3_appdata_path: trimField(appdataPath),
@@ -167,6 +173,7 @@ export function SettingsPage() {
       }
       setSaved({
         arma3_path: res.arma3_path ?? '',
+        arma3_workshop_path: res.arma3_workshop_path ?? '',
         arma3_tools_path: res.arma3_tools_path ?? '',
         arma3_profile_path: res.arma3_profile_path ?? '',
         arma3_appdata_path: res.arma3_appdata_path ?? '',
@@ -177,6 +184,7 @@ export function SettingsPage() {
         logs_remote_default_folder: res.logs_remote_default_folder ?? '/home/steam/arma3',
       })
       setArma3Path(res.arma3_path ?? '')
+      setArma3WorkshopPath(res.arma3_workshop_path ?? '')
       setToolsPath(res.arma3_tools_path ?? '')
       setProfilePath(res.arma3_profile_path ?? '')
       setAppdataPath(res.arma3_appdata_path ?? '')
@@ -241,6 +249,7 @@ export function SettingsPage() {
   function onDiscard() {
     if (!saved) return
     setArma3Path(saved.arma3_path ?? '')
+    setArma3WorkshopPath(saved.arma3_workshop_path ?? '')
     setToolsPath(saved.arma3_tools_path ?? '')
     setProfilePath(saved.arma3_profile_path ?? '')
     setAppdataPath(saved.arma3_appdata_path ?? '')

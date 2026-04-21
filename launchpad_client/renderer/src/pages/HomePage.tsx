@@ -29,7 +29,22 @@ export function HomePage({ onGoMission, onGoSettings }: Props) {
         <button type="button" className="btn btn-primary" onClick={onGoMission}>
           New Mission
         </button>
-      </section>      
+      </section>   
+
+      <section className="card" aria-labelledby="next-heading">
+        <h2 id="next-heading" className="card-title">
+          Step 3: Join the Discord for support and updates
+        </h2>
+        <iframe
+          src="https://discord.com/widget?id=1495804381638168739&theme=dark"
+          width={'100%'}
+          height={'500px'}
+          style={{ border: 'none', borderRadius: '8px' }}
+          allowTransparency
+          sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+          title="Discord community"
+        />
+      </section>         
     </div>
   )
 }

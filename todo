@@ -1,0 +1,3 @@
+- Remote servers added via settings not being saved.
+- Automatically try to find Arma 3/Arma 3 Tools installations paths, fallback to empty if no avail.
+- 

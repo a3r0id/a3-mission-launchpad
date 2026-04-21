@@ -188,6 +188,7 @@ export type MissionBuildPayload = {
 
 export type LaunchpadSettings = {
   arma3_path: string
+  arma3_workshop_path: string
   arma3_tools_path: string
   /** Arma 3 profile directory (…/Arma 3 - Other Profiles/<name>) — required for new mission builds. */
   arma3_profile_path: string
@@ -257,6 +258,12 @@ function parseLaunchpadSettings(raw: Record<string, unknown>): LaunchpadSettings
     .filter((row): row is RemoteServerSettingsEntry => row !== null)
   return {
     arma3_path: typeof raw.arma3_path === 'string' ? raw.arma3_path : '',
+    arma3_workshop_path:
+      typeof raw.arma3_workshop_path === 'string'
+        ? raw.arma3_workshop_path
+        : typeof raw.arma3_path === 'string' && raw.arma3_path.trim()
+          ? `${raw.arma3_path.replace(/[/\\]+$/, '')}/!Workshop`
+          : '',
     arma3_tools_path: typeof raw.arma3_tools_path === 'string' ? raw.arma3_tools_path : '',
     arma3_profile_path: typeof raw.arma3_profile_path === 'string' ? raw.arma3_profile_path : '',
     arma3_appdata_path: typeof raw.arma3_appdata_path === 'string' ? raw.arma3_appdata_path : '',
@@ -842,6 +849,7 @@ export async function updateSettings(
     Pick<
       LaunchpadSettings,
       | 'arma3_path'
+      | 'arma3_workshop_path'
       | 'arma3_tools_path'
       | 'arma3_profile_path'
       | 'arma3_appdata_path'

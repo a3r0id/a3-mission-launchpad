@@ -60,7 +60,7 @@ static void printHelp() {
 	    << "a3hook (development only)\n"
 	    << "  -h, --help              Show this help\n"
 	    << "  <pid> memdump <file>    Write a minidump (.dmp). Windows: dbghelp. Optional env A3HOOK_FULL_MINIDUMP=1 for full memory (large file).\n"
-		<< "  <pid> attach <ownPid>   Reparent the target main window into the owner main window (Windows; alias: hijack).\n"
+		<< "  <pid> attach <ownPid>   Reparent the target main window into the owner main window (Windows; alias: attach).\n"
 	    << "\n"
 	    << "Attach hints (borderless / ignored launcher window mode is common):\n"
 	    << "  A3HOOK_LIST_WINDOWS=1   Log top-level HWNDs for each PID before picking.\n"
@@ -468,19 +468,19 @@ static bool attachWindow(unsigned long targetPid, unsigned long ownerPid) {
 	SetLastError(0);
 	const LONG_PTR styleRaw = GetWindowLongPtr(targetHw, GWL_STYLE);
 	if (styleRaw == 0 && GetLastError() != 0) {
-		logError("GetWindowLongPtr(GWL_STYLE) failed: " + winLastErrorString("hijack"));
+		logError("GetWindowLongPtr(GWL_STYLE) failed: " + winLastErrorString("attach"));
 		return false;
 	}
 	LONG_PTR style = styleRaw;
 	style &= ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU);
 	style |= WS_CHILD | WS_VISIBLE;
 	if (!SetWindowLongPtr(targetHw, GWL_STYLE, style)) {
-		logError("SetWindowLongPtr failed: " + winLastErrorString("hijack"));
+		logError("SetWindowLongPtr failed: " + winLastErrorString("attach"));
 		return false;
 	}
 
 	if (!SetParent(targetHw, parentHw)) {
-		logError("SetParent failed: " + winLastErrorString("hijack"));
+		logError("SetParent failed: " + winLastErrorString("attach"));
 		return false;
 	}
 
@@ -540,7 +540,7 @@ int main(int argc, char** argv) {
 		const std::filesystem::path outPath(argv[3]);
 		return writeMemoryMinidump(targetPid, outPath) ? 0 : 3;
 	}
-	if (cmd == "attach" || cmd == "hijack") {
+	if (cmd == "attach" || cmd == "attach") {
 		unsigned long ownerPid = 0;
 		if (!parsePid(argv[3], ownerPid)) {
 			logError("Invalid owner process id: " + std::string(argv[3]));

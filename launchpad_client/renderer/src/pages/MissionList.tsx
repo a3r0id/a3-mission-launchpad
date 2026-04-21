@@ -6,11 +6,13 @@ import {
   deleteManagedScenario,
   fetchManagedScenarios,
   fetchManagedScenarioMods,
+  fetchSettings,
   launchManagedScenario,
   saveManagedScenarioMods,
   type ManagedScenario,
   type MissionLaunchMod,
 } from '../api/launchpad'
+import { pathForImportedHtmlMod } from '../mission/workshopModPath'
 import { extractGameTypeFromDescriptionExt, missionDescriptionExtPath } from '../mission/descriptionExt'
 import { MissionEditModal } from '../components/MissionEditModal'
 import { ScriptEditorModal } from '../components/IntegratedScriptEditor'
@@ -197,15 +199,25 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
         setModsInfo('No mods were recognized in that HTML file.')
         return
       }
+      let workshopRoot = ''
+      try {
+        const st = await fetchSettings()
+        workshopRoot = (st.arma3_workshop_path ?? '').trim()
+      } catch {
+        workshopRoot = ''
+      }
       const have = new Set(modsRows.map((m) => m.path.toLowerCase()))
       const additions: { path: string; enabled: boolean; label: string }[] = []
       for (const mod of parsed.mods) {
         const link = mod.link.trim()
         if (!link) continue
-        const key = link.toLowerCase()
+        const pathToSave = workshopRoot
+          ? pathForImportedHtmlMod(workshopRoot, mod.name ?? '', mod.id)
+          : link
+        const key = pathToSave.toLowerCase()
         if (!have.has(key)) {
           have.add(key)
-          additions.push({ path: link, enabled: true, label: mod.name?.trim() ?? '' })
+          additions.push({ path: pathToSave, enabled: true, label: mod.name?.trim() ?? '' })
         }
       }
       const merged = [...modsRows.map((m) => ({ ...m })), ...additions]
@@ -455,7 +467,8 @@ export function MissionListPage({ onOpenSettings }: MissionListPageProps) {
               <div className="mission-edit-section">
                 <p className="mission-edit-lead">
                   Save a mod profile just for this mission. Launchpad applies these enabled mods whenever this mission
-                  is started from Launchpad.
+                  is started from Launchpad. If you set a workshop folder in Settings, imported HTML presets are saved
+                  as paths under that folder (each mod is a subfolder whose name starts with @).
                 </p>
                 <div className="testing-toolbar" style={{ marginBottom: 8 }}>
                   <input

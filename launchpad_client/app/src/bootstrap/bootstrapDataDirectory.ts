@@ -26,6 +26,7 @@ export function bootstrapDataDirectory(ctx: Launchpad) {
         fs.writeFileSync(settingsFile, JSON.stringify(
             {
                 "arma3_path": "",
+                "arma3_workshop_path": "",
                 "arma3_tools_path": "",
                 "arma3_profile_path": "",
                 "arma3_appdata_path": (

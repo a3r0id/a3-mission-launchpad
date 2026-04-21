@@ -42,7 +42,7 @@ On **Linux**, `ctest` in the build directory runs `scripts/smoke_extension.py` a
 
 `"functionName"` or `"functionName|callId|json..."` — only the first two `|` characters split the header; JSON may contain `|`.
 
-Mission-side handling of `ipcInbound` (payload may contain `|`) is in `a3_launchpad_ext_core` (`fn_init.sqf` / `fn_onIpcInbound.sqf`).
+Mission-side handling of `ipcInbound` (payload may contain `|`) is in `a3_launchpad_ext_main` (`fn_init.sqf` / `fn_onIpcInbound.sqf`).
 
 ## Testing
 

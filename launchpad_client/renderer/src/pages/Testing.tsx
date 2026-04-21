@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   fetchTestingAutotestResult,
   fetchManagedScenarios,
+  fetchSettings,
   postTestingLaunch,
   type AutotestSpec,
   type ManagedScenario,
@@ -15,6 +16,12 @@ const LS_DEBUG = 'launchpad:testing:debugMode'
 const LS_USE_EXTENSION = 'launchpad:testing:useExtension'
 const AUTOTEST_POLL_MS = 2000
 
+function readSessionBool(key: string, defaultOn: boolean): boolean {
+  const raw = sessionStorage.getItem(key)
+  if (raw === null) return defaultOn
+  return raw === '1'
+}
+
 function fullMissionName(s: ManagedScenario) {
   const base = (s.name ?? '').trim()
   const suf = (s.map_suffix ?? '').trim()
@@ -26,12 +33,13 @@ export function TestingPage() {
   const [scenarios, setScenarios] = useState<ManagedScenario[]>([])
   const [selectedMissionId, setSelectedMissionId] = useState('')
   const [extraArgs, setExtraArgs] = useState(() => sessionStorage.getItem(LS_EXTRA) ?? '')
-  const [debugMode, setDebugMode] = useState(() => sessionStorage.getItem(LS_DEBUG) === '1')
-  const [useExtension, setUseExtension] = useState(() => sessionStorage.getItem(LS_USE_EXTENSION) === '1')
+  const [debugMode, setDebugMode] = useState(() => readSessionBool(LS_DEBUG, true))
+  const [useExtension, setUseExtension] = useState(() => readSessionBool(LS_USE_EXTENSION, true))
   const [autotestLabel, setAutotestLabel] = useState('')
   const [autotestIterations, setAutotestIterations] = useState('')
   const [autotestMaxDurationSec, setAutotestMaxDurationSec] = useState('')
   const [autotestTags, setAutotestTags] = useState('')
+  const [enableBattleEye, setEnableBattleEye] = useState(false)
 
   const [loading, setLoading] = useState(true)
   const [loadErr, setLoadErr] = useState<string | null>(null)
@@ -42,6 +50,7 @@ export function TestingPage() {
   const [autotestPending, setAutotestPending] = useState(false)
   const [autotestResult, setAutotestResult] = useState<TestingAutotestDetectedResult | null>(null)
   const [autotestErr, setAutotestErr] = useState<string | null>(null)
+  const [workshopFolderSet, setWorkshopFolderSet] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -57,9 +66,16 @@ export function TestingPage() {
       } else if (!saved && list.length) {
         setSelectedMissionId('')
       }
+      try {
+        const st = await fetchSettings()
+        setWorkshopFolderSet(Boolean((st.arma3_workshop_path ?? '').trim()))
+      } catch {
+        setWorkshopFolderSet(false)
+      }
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : 'Failed to load')
       setScenarios([])
+      setWorkshopFolderSet(false)
     } finally {
       setLoading(false)
     }
@@ -281,31 +297,58 @@ export function TestingPage() {
                   <span className="field-hint">
                     Optional. Split like a shell command (quotes allowed). Passed after{' '}
                     <code className="shell-inline-code">-mod=</code>.
+                    {workshopFolderSet
+                      ? ' Mission mod names use the workshop folder from Settings (each mod is a subfolder whose name starts with @).'
+                      : ' Set a workshop folder in Settings so saved mission mod names resolve there.'}
                   </span>
                 </label>
-                <label className="testing-inline-toggle">
-                  <input
-                    type="checkbox"
-                    checked={debugMode}
-                    onChange={(e) => setDebugMode(e.target.checked)}
-                    disabled={busy}
-                  />
-                  <span>
-                    Enable debug mode <code className="shell-inline-code">-debug</code>
-                  </span>
-                </label>
-                <label className="testing-inline-toggle">
-                  <input
-                    type="checkbox"
-                    checked={useExtension}
-                    onChange={(e) => setUseExtension(e.target.checked)}
-                    disabled={busy}
-                  />
-                  <span>
-                    Use Companion Extension <span className="shell-inline-code badge badge-info" 
-                    title="When enabled, your client will launch with our companion mod. This is required for certain debugging features to work.">?</span>
-                  </span>
-                </label>                
+                <div className="testing-toggle-list">
+                  <label className="testing-inline-toggle">
+                    <input
+                      type="checkbox"
+                      checked={debugMode}
+                      onChange={(e) => setDebugMode(e.target.checked)}
+                      disabled={busy}
+                    />
+                    <span>
+                      Enable debug mode <code className="shell-inline-code">-debug</code>
+                    </span>
+                  </label>
+                  <label className="testing-inline-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useExtension}
+                      onChange={(e) => setUseExtension(e.target.checked)}
+                      disabled={busy}
+                    />
+                    <span>
+                      Use Companion Extension{' '}
+                      <span
+                        className="shell-inline-code badge badge-info"
+                        title="When enabled, your client will launch with our companion mod. In most Launchpad testing cases this should be enabled."
+                      >
+                        ?
+                      </span>
+                    </span>
+                  </label>
+                  <label className="testing-inline-toggle">
+                    <input
+                      type="checkbox"
+                      checked={enableBattleEye}
+                      onChange={(e) => setEnableBattleEye(e.target.checked)}
+                      disabled={busy}
+                    />
+                    <span>
+                      Enable BattleEye{' '}
+                      <span
+                        className="shell-inline-code badge badge-info"
+                        title="When enabled, your client will launch with BattleEye enabled. In most Launchpad testing cases this should be disabled."
+                      >
+                        ?
+                      </span>
+                    </span>
+                  </label>
+                </div>
               </div>
 
               <fieldset className="testing-autotest-fieldset">

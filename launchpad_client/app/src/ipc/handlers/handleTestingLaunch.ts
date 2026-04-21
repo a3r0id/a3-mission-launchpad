@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { IpcMainInvokeEvent } from 'electron';
@@ -41,8 +42,8 @@ function hasCompanionPayload(root: string): boolean {
         looseFn: path.join(root, 'addons', 'a3_launchpad_ext_main', 'functions', 'fnc_init.sqf'),
       },
       {
-        pbo: path.join(root, 'addons', 'a3_launchpad_ext_core.pbo'),
-        looseFn: path.join(root, 'addons', 'a3_launchpad_ext_core', 'functions', 'fn_init.sqf'),
+        pbo: path.join(root, 'addons', 'a3_launchpad_ext_main.pbo'),
+        looseFn: path.join(root, 'addons', 'a3_launchpad_ext_main', 'functions', 'fn_init.sqf'),
       },
     ];
     for (const { pbo, looseFn } of checks) {
@@ -217,7 +218,30 @@ function mirrorDirectoryBestEffort(sourceDir: string, targetDir: string): { copi
   return { copied, busySkipped };
 }
 
-function syncCompanionModToDataDir(ctx: Launchpad, gameRootRaw: string): { path?: string; warning?: string } {
+function pruneLegacyCompanionArtifacts(targetModDir: string): void {
+  const addonsDir = path.join(targetModDir, 'addons');
+  const legacyTargets = [
+    path.join(addonsDir, 'a3_launchpad_ext_main.pbo'),
+    path.join(addonsDir, 'a3_launchpad_ext_main'),
+    path.join(addonsDir, 'a3_launchpad_ext_main', 'functions', 'fn_init.sqf'),
+    path.join(addonsDir, 'a3_launchpad_ext_main', 'functions', 'fn_onIpcInbound.sqf'),
+  ];
+  for (const target of legacyTargets) {
+    try {
+      if (!fs.existsSync(target)) continue;
+      const st = fs.statSync(target);
+      if (st.isDirectory()) {
+        fs.rmSync(target, { recursive: true, force: true });
+      } else {
+        fs.rmSync(target, { force: true });
+      }
+    } catch {
+      // best effort cleanup only
+    }
+  }
+}
+
+async function syncCompanionModToDataDir(ctx: Launchpad, gameRootRaw: string): Promise<{ path?: string; warning?: string }> {
   const dataModPath = path.join(ctx.dataDir, 'mod');
   const stagingSource = resolveCompanionStagingSourcePath(ctx, gameRootRaw);
   if (!stagingSource) {
@@ -226,8 +250,15 @@ function syncCompanionModToDataDir(ctx: Launchpad, gameRootRaw: string): { path?
     return { warning: 'Companion extension is enabled, but its staged mod folder was not found.' };
   }
   try {
-    fs.mkdirSync(ctx.dataDir, { recursive: true });
-    const mirror = mirrorDirectoryBestEffort(stagingSource, dataModPath);
+    await fsp.mkdir(ctx.dataDir, { recursive: true });
+    pruneLegacyCompanionArtifacts(dataModPath);
+    let busySkipped = 0;
+    try {
+      await fsp.cp(stagingSource, dataModPath, { recursive: true, force: true });
+    } catch {
+      const mirror = mirrorDirectoryBestEffort(stagingSource, dataModPath);
+      busySkipped = mirror.busySkipped;
+    }
     syncCompanionNativeBinaries(stagingSource, ctx.dataDir);
     if (!hasCompanionPayload(dataModPath)) {
       return {
@@ -235,10 +266,10 @@ function syncCompanionModToDataDir(ctx: Launchpad, gameRootRaw: string): { path?
           'Companion extension sync completed, but addon payload was not found under launchpad_data/mod/addons.',
       };
     }
-    if (mirror.busySkipped > 0) {
+    if (busySkipped > 0) {
       return {
         path: dataModPath,
-        warning: `Companion mod sync reused ${mirror.busySkipped} locked file(s) already under launchpad_data/mod.`,
+        warning: `Companion mod sync reused ${busySkipped} locked file(s) already under launchpad_data/mod.`,
       };
     }
     return { path: dataModPath };
@@ -290,6 +321,31 @@ function parseExtraArgs(input: unknown): { args: string[]; error?: string } {
   return { args: out };
 }
 
+function hasArmaArg(args: string[], key: string): boolean {
+  const needle = key.trim().toLowerCase();
+  if (!needle) return false;
+  return args.some((arg) => {
+    const token = arg.trim().toLowerCase();
+    return token === needle || token.startsWith(`${needle}=`);
+  });
+}
+
+function readBaseLaunchArgs(settings: Record<string, unknown>): { args: string[]; error?: string } {
+  const candidates: unknown[] = [
+    settings.arma3_launch_args,
+    settings.arma3_args,
+    settings.launch_args,
+    settings.default_launch_args,
+  ];
+  for (const candidate of candidates) {
+    if (candidate == null) continue;
+    const parsed = parseExtraArgs(candidate);
+    if (parsed.error) return parsed;
+    if (parsed.args.length > 0) return parsed;
+  }
+  return { args: [] };
+}
+
 function getArmaExePath(gameRootRaw: string): { exe?: string; error?: string } {
   const gameRoot = gameRootRaw.trim();
   if (!gameRoot) return { error: 'Arma 3 path is not configured.' };
@@ -308,30 +364,179 @@ function profileNameFromPath(profilePathRaw: unknown): string {
   return path.basename(path.resolve(trimmed));
 }
 
-function resolveModPath(modPathRaw: string, gameRootRaw: string): string | null {
-  const m = modPathRaw.trim();
-  if (!m) return null;
-  if (path.isAbsolute(m) && fs.existsSync(m)) return path.resolve(m);
-  const gameRoot = gameRootRaw.trim();
-  if (!gameRoot) return null;
-  const joined = path.join(path.resolve(gameRoot), m);
-  if (fs.existsSync(joined)) return joined;
+/** Placeholders so splitting on `:` (Linux) does not break `https://` in mod lists. */
+const SPLIT_MASK_HTTPS = '__LP_SPLIT_HTTPS__';
+const SPLIT_MASK_HTTP = '__LP_SPLIT_HTTP__';
+
+function splitModPathTokens(modPathRaw: string): string[] {
+  const trimmed = modPathRaw.trim().replace(/^["']|["']$/g, '');
+  if (!trimmed) return [];
+  let value = /^-mod=/i.test(trimmed) ? trimmed.slice(5) : trimmed;
+  value = value.replace(/https:\/\//gi, SPLIT_MASK_HTTPS).replace(/http:\/\//gi, SPLIT_MASK_HTTP);
+  const sep = process.platform === 'win32' ? ';' : ':';
+  return value
+    .split(sep)
+    .map((part) =>
+      part
+        .trim()
+        .replace(/^["']|["']$/g, '')
+        .replaceAll(SPLIT_MASK_HTTPS, 'https://')
+        .replaceAll(SPLIT_MASK_HTTP, 'http://'),
+    )
+    .filter(Boolean);
+}
+
+const STEAM_ARMA3_APPID = '107410';
+
+/** Fix strings that were split on `:` inside `http://` (e.g. `http;//steam…`). */
+function normalizeBrokenUrlSchemes(input: string): string {
+  return input.replace(/(https?);\/\//gi, '$1://');
+}
+
+function extractSteamWorkshopId(input: string): string | null {
+  const s = input.trim();
+  const patterns = [
+    /(?:\?|&)id=(\d{6,})/i,
+    /filedetails\/(\d{6,})/i,
+    /workshop\/files\/\/?\?id=(\d{6,})/i,
+    /CommunityFilePage\/(\d{6,})/i,
+  ];
+  for (const re of patterns) {
+    const m = s.match(re);
+    if (m) return m[1];
+  }
   return null;
 }
 
-function getEnabledLaunchMods(ctx: Launchpad, row: ManagedMissionRow, gameRoot: string): string[] {
-  const direct = Array.isArray(row.launch_mods) ? row.launch_mods : [];
-  const fallback = readJsonFile<{ mods?: unknown }>(path.join(ctx.dataDir, 'testing_modlist.json'), { mods: [] });
-  const source = direct.length > 0 ? direct : (Array.isArray(fallback.mods) ? fallback.mods : []);
+function enumerateWorkshopContentRoots(gameRootRaw: string, workshopRootRaw: string): string[] {
   const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (p: string) => {
+    const key = path.resolve(p).toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(path.resolve(p));
+  };
+
+  const gameRoot = gameRootRaw.trim();
+  if (gameRoot) {
+    const steamapps = path.resolve(path.join(path.resolve(gameRoot), '..', '..'));
+    add(path.join(steamapps, 'workshop', 'content', STEAM_ARMA3_APPID));
+  }
+
+  const ws = expandEnvVars(workshopRootRaw.trim());
+  if (ws) {
+    const resolved = path.resolve(ws);
+    const candidates = [
+      resolved,
+      path.join(resolved, STEAM_ARMA3_APPID),
+      path.join(resolved, 'content', STEAM_ARMA3_APPID),
+      path.join(resolved, 'workshop', 'content', STEAM_ARMA3_APPID),
+    ];
+    for (const c of candidates) {
+      try {
+        if (fs.existsSync(c) && fs.statSync(c).isDirectory()) add(c);
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return out;
+}
+
+function resolveSteamWorkshopToDiskPath(id: string, gameRootRaw: string, workshopRootRaw: string): string | null {
+  if (!/^\d+$/.test(id)) return null;
+  for (const root of enumerateWorkshopContentRoots(gameRootRaw, workshopRootRaw)) {
+    const full = path.join(root, id);
+    try {
+      if (fs.existsSync(full) && fs.statSync(full).isDirectory()) return path.resolve(full);
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+function isWorkshopModFolderToken(token: string): boolean {
+  const t = token.trim();
+  if (!t) return false;
+  if (t.includes('/') || t.includes('\\')) return false;
+  if (t.includes('..')) return false;
+  if (/^https?:\/\//i.test(t)) return false;
+  if (/^steam:/i.test(t)) return false;
+  return /^@?[A-Za-z0-9_.-]+$/.test(t);
+}
+
+function resolveOneModToken(tokenRaw: string, gameRootRaw: string, workshopRootRaw: string): string | null {
+  const token = expandEnvVars(normalizeBrokenUrlSchemes(tokenRaw.trim()));
+  if (!token) return null;
+
+  const workshopId = extractSteamWorkshopId(token);
+  if (workshopId) {
+    const disk = resolveSteamWorkshopToDiskPath(workshopId, gameRootRaw, workshopRootRaw);
+    if (disk) return disk;
+  }
+
+  if (/^https?:\/\//i.test(token) || /steamcommunity\.com/i.test(token) || /^steam:\/\//i.test(token)) {
+    return null;
+  }
+
+  if (path.isAbsolute(token)) {
+    if (fs.existsSync(token)) return path.resolve(token);
+    return token;
+  }
+  const gameRoot = gameRootRaw.trim();
+  if (gameRoot) {
+    const joined = path.join(path.resolve(gameRoot), token);
+    if (fs.existsSync(joined)) return joined;
+  }
+  const workshopRaw = expandEnvVars(workshopRootRaw.trim());
+  if (workshopRaw && isWorkshopModFolderToken(token)) {
+    const folder = token.startsWith('@') ? token : `@${token}`;
+    return path.resolve(path.join(path.resolve(workshopRaw), folder));
+  }
+  // Keep unresolved relative mod tokens (e.g. @CBA_A3) so Arma can resolve from game cwd.
+  return token;
+}
+
+function collectEnabledLaunchMods(source: unknown, gameRoot: string, workshopRoot: string): string[] {
+  const out: string[] = [];
+  if (!Array.isArray(source)) return out;
   for (const item of source) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const obj = item as Record<string, unknown>;
     if (obj.enabled === false) continue;
-    const resolved = resolveModPath(typeof obj.path === 'string' ? obj.path : '', gameRoot);
-    if (resolved) out.push(resolved);
+    const rawPath = typeof obj.path === 'string' ? obj.path : '';
+    const parts = splitModPathTokens(rawPath);
+    for (const part of parts) {
+      const resolved = resolveOneModToken(part, gameRoot, workshopRoot);
+      if (resolved) out.push(resolved);
+    }
   }
   return out;
+}
+
+function uniqueMods(mods: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const mod of mods) {
+    const key = mod.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(mod);
+  }
+  return out;
+}
+
+function getEnabledLaunchMods(ctx: Launchpad, row: ManagedMissionRow, gameRoot: string, workshopRoot: string): string[] {
+  const direct = Array.isArray(row.launch_mods) ? row.launch_mods : [];
+  const fallback = readJsonFile<{ mods?: unknown }>(path.join(ctx.dataDir, 'testing_modlist.json'), { mods: [] });
+  const fromDirect = collectEnabledLaunchMods(direct, gameRoot, workshopRoot);
+  if (fromDirect.length > 0) {
+    return uniqueMods(fromDirect);
+  }
+  const fallbackRows = Array.isArray(fallback.mods) ? fallback.mods : [];
+  return uniqueMods(collectEnabledLaunchMods(fallbackRows, gameRoot, workshopRoot));
 }
 
 function writeAutotestFile(ctx: Launchpad, missionId: string, missionFolder: string, specInput: unknown): { path?: string; error?: string } {
@@ -386,16 +591,17 @@ export async function handleTestingLaunch(
 
   const settings = readJsonFile<Record<string, unknown>>(ctx.settingsFile, {});
   const gameRoot = typeof settings.arma3_path === 'string' ? settings.arma3_path : '';
+  const workshopRoot = typeof settings.arma3_workshop_path === 'string' ? settings.arma3_workshop_path : '';
   const exeRow = getArmaExePath(gameRoot);
   if (!exeRow.exe) {
     return { error: exeRow.error ?? 'Could not resolve Arma 3 executable.' };
   }
 
-  const modPaths = getEnabledLaunchMods(ctx, row, gameRoot);
+  const modPaths = getEnabledLaunchMods(ctx, row, gameRoot, workshopRoot);
   const useCompanionExtension = body.use_companion_extension === true;
   let companionWarning: string | null = null;
   if (useCompanionExtension) {
-    const companionSync = syncCompanionModToDataDir(ctx, gameRoot);
+    const companionSync = await syncCompanionModToDataDir(ctx, gameRoot);
     const companionPath = companionSync.path;
     if (!companionPath) {
       companionWarning = companionSync.warning ?? 'Companion extension is enabled, but its mod folder was not found. Launching without companion features.';
@@ -409,12 +615,18 @@ export async function handleTestingLaunch(
   const extra = parseExtraArgs(body.extra_args);
   if (extra.error) return { error: extra.error };
 
-  const profileName = profileNameFromPath(row.profile_path);
+  const baseArgs = readBaseLaunchArgs(settings);
+  if (baseArgs.error) return { error: baseArgs.error };
+  const launchArgs = [...baseArgs.args, ...extra.args];
+  const profileName =
+    profileNameFromPath(row.profile_path) ||
+    profileNameFromPath(settings.arma3_profile_path);
   const argv = buildArmaLaunchArgv({
     exePath: exeRow.exe,
-    profileName,
+    profileName: hasArmaArg(launchArgs, '-name') ? '' : profileName,
     modPaths,
-    extraArgs: extra.args,
+    extraArgs: launchArgs,
+    includeNosplash: !hasArmaArg(launchArgs, '-nosplash'),
   });
 
   const autotest = body.autotest === true;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   fetchManagedScenarios,
   fetchDebugServerStatus,
+  fetchSettings,
   postDebugCommandSend,
   postDebugServerStart,
   postDebugServerStop,
@@ -76,6 +77,7 @@ export function DebuggingPage() {
     }
   })
   const [showLogs, setShowLogs] = useState(false)
+  const [workshopFolderSet, setWorkshopFolderSet] = useState(false)
 
   useEffect(() => {
     localStorage.setItem(LS_DEBUGGING_PRESETS, JSON.stringify(presets))
@@ -98,6 +100,9 @@ export function DebuggingPage() {
         if (rows.length === 1) setSelectedMissionId(rows[0].id)
       })
       .catch(() => {})
+    void fetchSettings()
+      .then((st) => setWorkshopFolderSet(Boolean((st.arma3_workshop_path ?? '').trim())))
+      .catch(() => setWorkshopFolderSet(false))
   }, [refreshServer])
 
   useEffect(() => {
@@ -268,6 +273,11 @@ export function DebuggingPage() {
             disabled={launchBusy}
             spellCheck={false}
           />
+          <span className="field-hint">
+            {workshopFolderSet
+              ? 'Mission mod names use the workshop folder from Settings (each mod is a subfolder whose name starts with @).'
+              : 'Set a workshop folder in Settings so saved mission mod names resolve there.'}
+          </span>
         </label>
         <label className="testing-inline-toggle">
           <input type="checkbox" checked={useCompanion} onChange={(e) => setUseCompanion(e.target.checked)} />
