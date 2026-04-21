@@ -33,7 +33,7 @@ export function HomePage({ onGoMission, onGoSettings }: Props) {
 
       <section className="card" aria-labelledby="next-heading">
         <h2 id="next-heading" className="card-title">
-          Step 3: Join the Discord for support and updates
+          Step 3: Join the Discord Community to chat, get support and more!
         </h2>
         <iframe
           src="https://discord.com/widget?id=1495804381638168739&theme=dark"

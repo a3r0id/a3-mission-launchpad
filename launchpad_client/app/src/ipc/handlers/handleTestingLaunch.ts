@@ -31,6 +31,7 @@ type ManagedMissionRow = {
   name?: unknown;
   map_suffix?: unknown;
   profile_path?: unknown;
+  project_path?: unknown;
   launch_mods?: unknown;
 };
 
@@ -364,6 +365,20 @@ function profileNameFromPath(profilePathRaw: unknown): string {
   return path.basename(path.resolve(trimmed));
 }
 
+function resolveMissionArgPath(projectPathRaw: unknown): { missionArgPath?: string; error?: string } {
+  const projectPath = typeof projectPathRaw === 'string' ? projectPathRaw.trim() : '';
+  if (!projectPath) return { error: 'Mission project path is missing.' };
+  const resolvedProject = path.resolve(projectPath);
+  if (!fs.existsSync(resolvedProject) || !fs.statSync(resolvedProject).isDirectory()) {
+    return { error: `Mission project path was not found: ${resolvedProject}` };
+  }
+  const missionSqmPath = path.join(resolvedProject, 'mission.sqm');
+  if (!fs.existsSync(missionSqmPath) || !fs.statSync(missionSqmPath).isFile()) {
+    return { error: `Mission file was not found: ${missionSqmPath}` };
+  }
+  return { missionArgPath: missionSqmPath };
+}
+
 /** Placeholders so splitting on `:` (Linux) does not break `https://` in mod lists. */
 const SPLIT_MASK_HTTPS = '__LP_SPLIT_HTTPS__';
 const SPLIT_MASK_HTTP = '__LP_SPLIT_HTTP__';
@@ -621,9 +636,14 @@ export async function handleTestingLaunch(
   const profileName =
     profileNameFromPath(row.profile_path) ||
     profileNameFromPath(settings.arma3_profile_path);
+  const missionArg = resolveMissionArgPath(row.project_path);
+  if (!missionArg.missionArgPath) {
+    return { error: missionArg.error ?? 'Mission file was not found.' };
+  }
   const argv = buildArmaLaunchArgv({
     exePath: exeRow.exe,
     profileName: hasArmaArg(launchArgs, '-name') ? '' : profileName,
+    missionArgPath: missionArg.missionArgPath,
     modPaths,
     extraArgs: launchArgs,
     includeNosplash: !hasArmaArg(launchArgs, '-nosplash'),
@@ -688,8 +708,7 @@ export async function handleTestingLaunch(
       message: `${
         companionWarning ? `${companionWarning} ` : ''
       }${
-        "Started Arma 3. If the mission does not auto-load, open it from Scenarios " +
-        `(folder name '${missionFolder}') — it should appear when symlinked into your profile.`}`,
+        'Launching mission...'}`,
     };
   } catch (err) {
     return { error: `Could not start Arma 3: ${err instanceof Error ? err.message : String(err)}` };

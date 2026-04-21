@@ -11,6 +11,7 @@ export type ArmaLaunchOptions = {
 export type BuildArmaLaunchArgvInput = {
   exePath: string;
   profileName?: string;
+  missionArgPath?: string;
   modPaths?: string[];
   extraArgs?: string[];
   includeNosplash?: boolean;
@@ -28,6 +29,9 @@ export function buildArmaLaunchArgv(input: BuildArmaLaunchArgvInput): string[] {
   if (input.includeNosplash !== false) argv.push('-nosplash');
   if (input.profileName && input.profileName.trim()) {
     argv.push(`-name=${input.profileName.trim()}`);
+  }
+  if (input.missionArgPath && input.missionArgPath.trim()) {
+    argv.push(input.missionArgPath.trim());
   }
   const mods = Array.isArray(input.modPaths) ? input.modPaths.filter((x) => typeof x === 'string' && x.trim()) : [];
   if (mods.length > 0) {

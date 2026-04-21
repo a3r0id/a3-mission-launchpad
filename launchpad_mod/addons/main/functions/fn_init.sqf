@@ -1,44 +1,25 @@
 a3_launchpad_ext_callbacks = createHashMap; // Format: [id, [callback_code, result_data, completed]]
 
-// Handle extension callbacks
-addMissionEventHandler ["ExtensionCallback", {
-    params ["_extension", "_function", "_resultData"];
-    if (_extension != "A3_LAUNCHPAD_EXT" || !isServer) exitWith {};
+// If we are in multiplayer and not the server, exit
+if (isMultiplayer && !isServer) exitWith {};
 
-    if (_function == "ipcInbound") exitWith {
-        [_resultData] call (missionNamespace getVariable "a3_launchpad_ext_main_fnc_onIpcInbound");
-    };
-
-    private _callId = "";
-    private _result = _resultData;
-
-    private _delimiterIndex = _resultData find "|";
-    if (_delimiterIndex != -1) then {
-        _callId = _resultData select [0, _delimiterIndex];
-        _result = _resultData select [_delimiterIndex + 1];
-    };
-
-    if (_callId != "" && _callId in a3_launchpad_ext_callbacks) then {
-        private _callbackData = a3_launchpad_ext_callbacks get _callId;
-        _callbackData set [1, _result];
-        _callbackData set [2, true];
-
-        private _callbackCode = _callbackData select 0;
-        if (!isNil "_callbackCode" && {typeName _callbackCode == "CODE"}) then {
-            [_result] call _callbackCode;
+// Connect extension to Launchpad's debug socket (Launchpad listens; extension is the TCP client).
+// Defaults match launchpad_client DEBUG_SOCKET_DEFAULT_HOST / DEBUG_SOCKET_DEFAULT_PORT.
+systemChat "Connecting extension to Launchpad's debug socket...";
+private _fnCall = missionNamespace getVariable "a3_launchpad_ext_main_fnc_call";
+if (!isNil "_fnCall") then {
+    diag_log format ["Calling ipcConnect with fnCall: %1", str _fnCall];
+    private _ipcPayload = "{""host"":""127.0.0.1"",""port"":8112}";
+    diag_log format ["Calling ipcConnect with ipcPayload: %1", str _ipcPayload];
+    private _connectResult = ["ipcConnect", _ipcPayload, 8] call _fnCall;
+    diag_log format ["connectResult: %1", str _connectResult];
+    if (_connectResult isEqualTo "") then {
+        diag_log "[A3_LAUNCHPAD_EXT] ipcConnect timed out or empty; start the debug connection in Launchpad if you need it.";
+    } else {
+        if (_connectResult find "true" < 0 || _connectResult find "ok" < 0) then {
+            diag_log format ["[A3_LAUNCHPAD_EXT] ipcConnect: %1", _connectResult];
         };
-    }
-}];
-
-// Simple example of callback registration
-/**
-private _myUniqueId = "myUniqueId";
-a3_launchpad_ext_callbacks set [_myUniqueId, [
-    {
-        params ["_result"];
-        diag_log format ["Callback result: %1", _result];
-    },
-    "",
-    false
-]];
- */
+    };
+} else {
+    diag_log "fnCall is nil, so we can't connect to the debug socket";
+};
