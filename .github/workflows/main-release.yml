@@ -18,25 +18,6 @@ permissions:
 
 jobs:
 
-  # require-pr-merge:
-  #   name: Require PR merge (no direct push to main)
-  #   runs-on: [self-hosted, linux, x64]
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Ensure main was updated via PR merge, not direct push
-  #       run: |
-  #         if git rev-parse HEAD^2 >/dev/null 2>&1; then
-  #           echo "Merge commit detected (PR merge). Allowed."
-  #           exit 0
-  #         fi
-  #         if git log -1 --pretty=%B | grep -qE ' \(#[0-9]+\)$|^Merge pull request'; then
-  #           echo "PR merge (squash/rebase) detected. Allowed."
-  #           exit 0
-  #         fi
-  #         echo "::error::Direct push to main is not allowed."
-  #         exit 1
-  # Bump ci
-
   version:
     name: Bump version
     runs-on: [self-hosted, linux, x64]
