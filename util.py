@@ -153,7 +153,7 @@ def _publish_copy_ignore(_src: str, names: list[str]) -> set[str]:
 
 def _run_publish_in_temp_workspace(temp_root: Path, cleanup_mode: str) -> None:
     dist_root = temp_root / "dist"
-    workspace = dist_root / f"a3-mission-launchpad-publish-{uuid.uuid4().hex[:12]}"
+    workspace = dist_root / f"launchpad-publish-{uuid.uuid4().hex[:12]}"
     dist_existed_before = dist_root.exists()
     dist_root.mkdir(parents=True, exist_ok=True)
     print(f"Creating temporary publish workspace: {workspace}")
@@ -487,10 +487,10 @@ def _validate_update_config() -> None:
     required_snippets = (
         ("index.ts", "updateElectronApp("),
         ("index.ts", "UpdateSourceType.ElectronPublicUpdateService"),
-        ("index.ts", "repo: 'a3r0id/a3-mission-launchpad'"),
+        ("index.ts", "repo: 'a3r0id/launchpad'"),
         ("forge.config.js", "name: '@electron-forge/publisher-github'"),
         ("forge.config.js", "owner: 'a3r0id'"),
-        ("forge.config.js", "name: 'a3-mission-launchpad'"),
+        ("forge.config.js", "name: 'launchpad'"),
         ("forge.config.js", "tagPrefix: 'v'"),
     )
     for file_name, snippet in required_snippets:

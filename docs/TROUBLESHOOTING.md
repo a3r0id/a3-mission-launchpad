@@ -95,4 +95,4 @@ Fix issues in **files you touch** first. Pre-existing warnings elsewhere can be 
 
 ## Still stuck?
 
-Open a **[GitHub issue](https://github.com/a3r0id/a3-mission-launchpad/issues)** with your OS, Node version, whether you are in **dev** or **packaged** mode, and the last few lines of the terminal or DevTools console. For architecture questions, see **[Contributing](CONTRIBUTING.md)**.
+Open a **[GitHub issue](https://github.com/a3r0id/launchpad/issues)** with your OS, Node version, whether you are in **dev** or **packaged** mode, and the last few lines of the terminal or DevTools console. For architecture questions, see **[Contributing](CONTRIBUTING.md)**.

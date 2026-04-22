@@ -51,8 +51,8 @@ Optional release automation lives in **`util.py`** at the repo root (`python uti
 ## 1. Clone the repository
 
 ```bash
-git clone https://github.com/a3r0id/a3-mission-launchpad.git
-cd a3-mission-launchpad
+git clone https://github.com/a3r0id/launchpad.git
+cd launchpad
 ```
 
 Use a path **without unusual Unicode or very long segments** on Windows to avoid toolchain path limits.

@@ -1,5 +1,5 @@
 {
-	"name": "A3 Mission Launchpad Extension Environment (Linux)",
+	"name": "A3 Launchpad Extension Environment (Linux)",
 	"build": {
 		"dockerfile": ".devcontainer/Dockerfile",
 		"context": ".."

@@ -8,7 +8,7 @@ if (app.isPackaged) {
     updateElectronApp({
       updateSource: {
         type: UpdateSourceType.ElectronPublicUpdateService,
-        repo: 'a3r0id/a3-mission-launchpad',
+        repo: 'a3r0id/launchpad',
       },
       updateInterval: '1 hour',
       logger: require('electron-log'),

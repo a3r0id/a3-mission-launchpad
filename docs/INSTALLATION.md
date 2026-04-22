@@ -42,7 +42,7 @@ For packaging, staging **`A3LaunchPad`**, HEMTT, the extension, and **`util.py`*
 
 ## Packaged installs and releases
 
-Prebuilt artifacts may be published on the project’s **[GitHub Releases](https://github.com/a3r0id/a3-mission-launchpad/releases)** page when maintainers ship a version.
+Prebuilt artifacts may be published on the project’s **[GitHub Releases](https://github.com/a3r0id/launchpad/releases)** page when maintainers ship a version.
 
 > [!IMPORTANT]
 > Local and CI-built binaries are typically **unsigned**. Windows **SmartScreen** or antivirus may warn or block the first run. Allow only if you trust the source (official release or your own build).

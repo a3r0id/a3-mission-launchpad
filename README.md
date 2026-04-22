@@ -29,7 +29,7 @@ Looking to contribute? Check out our [Contribution Info](./docs/CONTRIBUTING.md)
 
 Install Launchpad via a release build or from source (common on Linux). See **[Installation](docs/INSTALLATION.md)** for a short overview and **[Installing from source](docs/SOURCE_INSTALL.md)** for a full clone-to-package walkthrough.
 
-- **Download a release** — [GitHub Releases](https://github.com/a3r0id/a3-mission-launchpad/releases)
+- **Download a release** — [GitHub Releases](https://github.com/a3r0id/launchpad/releases)
 - **Build from source** — [SOURCE_INSTALL.md](docs/SOURCE_INSTALL.md) (companion mod, extension, packaging, `util.py`)
 
 ### Quick Start

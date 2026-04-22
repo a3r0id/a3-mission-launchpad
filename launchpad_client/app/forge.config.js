@@ -143,7 +143,7 @@ module.exports = {
       config: {
         repository: {
           owner: 'a3r0id',
-          name: 'a3-mission-launchpad',
+          name: 'launchpad',
         },
         prerelease: false,
         /** Must match ``releaseTag`` derived in ``index.ts`` (default ``v`` + semver from ``version.json``). */

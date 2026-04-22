@@ -1,11 +1,11 @@
 {
-  "name": "a3-mission-launchpad",
-  "productName": "a3-mission-launchpad",
+  "name": "launchpad",
+  "productName": "launchpad",
   "version": "0.0.5",
-  "description": "A3 Mission Launchpad",
+  "description": "Launchpad",
   "repository": {
     "type": "git",
-    "url": "https://github.com/a3r0id/a3-mission-launchpad.git"
+    "url": "https://github.com/a3r0id/launchpad.git"
   },
   "main": ".vite/build/index.js",
   "scripts": {

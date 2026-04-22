@@ -1,6 +1,6 @@
-# A3 Mission Launchpad extension (`A3_LAUNCHPAD_EXT`)
+# A3 Launchpad extension (`A3_LAUNCHPAD_EXT`)
 
-Cross-platform Arma 3 extension for the Mission Launchpad: JSON `callExtension` API, async callbacks, TCP IPC to the local Launchpad process, and logging.
+Cross-platform Arma 3 extension for Launchpad: JSON `callExtension` API, async callbacks, TCP IPC to the local Launchpad process, and logging.
 
 ## Features
 
@@ -27,7 +27,7 @@ cmake --build build --config Release   # add --config Release on Visual Studio g
 
 Artifacts are copied next to the staged mod folder: `../../A3LaunchPad/A3_LAUNCHPAD_EXT_x64.(dll|so)` (POST_BUILD in `CMakeLists.txt`; PBOs live under `../../A3LaunchPad/mod/addons/`).
 
-On **Linux**, `ctest` in the build directory runs `scripts/smoke_extension.py` against the built `.so` (same checks as [Extension CI](https://github.com/a3r0id/a3-mission-launchpad/actions/workflows/extension-ci.yml) when `launchpad_mod/extension/**` changes).
+On **Linux**, `ctest` in the build directory runs `scripts/smoke_extension.py` against the built `.so` (same checks as [Extension CI](https://github.com/a3r0id/launchpad/actions/workflows/extension-ci.yml) when `launchpad_mod/extension/**` changes).
 
 ## Functions (native)
 

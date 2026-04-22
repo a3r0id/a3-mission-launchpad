@@ -1,5 +1,5 @@
 /**
-	Cross-platform Arma 3 extension for the A3 Mission Launchpad Project.
+	Cross-platform Arma 3 extension for the Arma 3 Launchpad Project.
 
 	Native call format (from Arma): functionName|uid|{"json":"data"}
 	- functionName: required
