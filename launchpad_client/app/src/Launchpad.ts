@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Menu, autoUpdater } from 'electron';
+import { app, BrowserWindow, shell, Menu, autoUpdater, nativeTheme } from 'electron';
 import MENU_TEMPLATE from './menu.json';
 import CONFIG from '../config.json';
 import path from 'node:path';
@@ -394,6 +394,8 @@ export default class Launchpad {
     this.mainWindow = new BrowserWindow({
       width: 1280,
       height: 800,
+      /* Match renderer --bg-app so OS chrome / subpixel gaps do not flash default white */
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#1a1d21' : '#e8eaed',
       ...(icon ? { icon } : {}),
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),

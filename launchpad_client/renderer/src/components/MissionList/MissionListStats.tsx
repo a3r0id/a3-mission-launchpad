@@ -2,21 +2,30 @@ type MissionListStatsProps = {
   total: number
   visible: number
   hasFilter: boolean
+  /** Defaults to mission / missions */
+  itemSingular?: string
+  itemPlural?: string
 }
 
-export function MissionListStats({ total, visible, hasFilter }: MissionListStatsProps) {
+export function MissionListStats({
+  total,
+  visible,
+  hasFilter,
+  itemSingular = 'mission',
+  itemPlural = 'missions',
+}: MissionListStatsProps) {
   if (total === 0) return null
-  const missionWord = total === 1 ? 'mission' : 'missions'
+  const itemWord = total === 1 ? itemSingular : itemPlural
   if (!hasFilter) {
     return (
       <p className="mission-list-stats" aria-live="polite">
-        {total} {missionWord}
+        {total} {itemWord}
       </p>
     )
   }
   return (
     <p className="mission-list-stats" aria-live="polite">
-      Showing {visible} of {total} {missionWord}
+      Showing {visible} of {total} {itemWord}
     </p>
   )
 }

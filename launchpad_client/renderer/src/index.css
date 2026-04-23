@@ -58,11 +58,16 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Same as body: avoids a thin default-white strip if html peeks past body (e.g. under the menu bar). */
+  background: var(--bg-app);
+}
+
 html,
 body {
   height: 100%;
   margin: 0;
-  overflow: hidden;
+  /* overflow: hidden; */
 }
 
 body {

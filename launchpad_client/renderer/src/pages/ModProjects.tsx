@@ -1,6 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faEdit, faFolderOpen, faTrash, faEllipsisVertical } from '@fortawesome/free-solid-svg-icons'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   createManagedModProject,
   deleteManagedModProject,
@@ -10,6 +8,16 @@ import {
 } from '../api/launchpad'
 import Util from '../Util'
 import { ScriptEditorModal } from '../components/Editor/IntegratedScriptEditor'
+import {
+  MissionSearchBar,
+  MissionListStats,
+  ModProjectListTable,
+  useModProjectListPreferences,
+  type ModProjectTableColumnId,
+} from '../components/MissionList'
+import '../components/MissionList/MissionList.less'
+
+type SortDir = 'asc' | 'desc'
 
 export function ModProjectsPage() {
   const [projects, setProjects] = useState<ManagedModProject[]>([])
@@ -32,10 +40,13 @@ export function ModProjectsPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<ManagedModProject | null>(null)
   const [scriptEditor, setScriptEditor] = useState<{ root: string; title: string } | null>(null)
-  const [modMenuOpenId, setModMenuOpenId] = useState<string | null>(null)
   const [deleteRemoveDisk, setDeleteRemoveDisk] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteErr, setDeleteErr] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<ModProjectTableColumnId>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [searchQuery, setSearchQuery] = useState('')
+  const { favoriteIds, toggleFavorite, columnWidths, setColumnWidth } = useModProjectListPreferences()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -55,17 +66,82 @@ export function ModProjectsPage() {
     void load()
   }, [load])
 
-  useEffect(() => {
-    if (!modMenuOpenId) return
-    const onDocMouseDown = (e: MouseEvent) => {
-      const el = e.target as HTMLElement | null
-      if (!el) return
-      if (el.closest(`[data-mod-row-menu="${modMenuOpenId}"]`)) return
-      setModMenuOpenId(null)
+  const filteredProjects = useMemo(() => {
+    if (!searchQuery.trim()) return projects
+    const q = searchQuery.toLowerCase().trim()
+    return projects.filter((p) => {
+      const name = (p.name ?? '').toLowerCase()
+      const desc = (p.description ?? '').toLowerCase()
+      const path = (p.project_path ?? '').toLowerCase()
+      return name.includes(q) || desc.includes(q) || path.includes(q)
+    })
+  }, [projects, searchQuery])
+
+  function hasFolderPath(p: ManagedModProject) {
+    return Boolean(p.project_path?.trim())
+  }
+
+  const sortedProjects = useMemo(() => {
+    const copy = [...filteredProjects]
+    copy.sort((a, b) => {
+      const fa = favoriteIds.has(a.id)
+      const fb = favoriteIds.has(b.id)
+      if (fa !== fb) return fa ? -1 : 1
+      let aVal = ''
+      let bVal = ''
+      switch (sortField) {
+        case 'name':
+          aVal = (a.name ?? '').toLowerCase()
+          bVal = (b.name ?? '').toLowerCase()
+          break
+        case 'description':
+          aVal = (a.description ?? '').toLowerCase()
+          bVal = (b.description ?? '').toLowerCase()
+          break
+        case 'folder':
+          aVal = hasFolderPath(a) ? '1' : '0'
+          bVal = hasFolderPath(b) ? '1' : '0'
+          break
+      }
+      const cmp = aVal.localeCompare(bVal)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return copy
+  }, [filteredProjects, sortField, sortDir, favoriteIds])
+
+  function handleSort(field: ModProjectTableColumnId) {
+    if (sortField === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortDir('asc')
     }
-    document.addEventListener('mousedown', onDocMouseDown)
-    return () => document.removeEventListener('mousedown', onDocMouseDown)
-  }, [modMenuOpenId])
+  }
+
+  function openFolder(p: ManagedModProject) {
+    setActionErr(null)
+    void Util.revealPathInExplorer(p.project_path ?? '', p.project_path ?? '').catch((e) =>
+      setActionErr(e instanceof Error ? e.message : 'Could not open folder'),
+    )
+  }
+
+  function addStarterForProject(p: ManagedModProject) {
+    const root = p.project_path?.trim()
+    if (!root) return
+    setActionErr(null)
+    void (async () => {
+      const init = await Util.initModProjectHemtt(root, {
+        name: (p.name ?? '').trim() || undefined,
+      })
+      if (!init.ok) {
+        setActionErr(init.error ?? 'Could not add starter build files.')
+        return
+      }
+      setSaveInfo(
+        init.initialized === false ? 'Starter build files were already present.' : 'Starter build files are ready.',
+      )
+    })()
+  }
 
   function openCreate() {
     setCreateName('')
@@ -181,7 +257,7 @@ export function ModProjectsPage() {
   }
 
   return (
-    <div className="page-stack">
+    <div className="mission-page">
       <ScriptEditorModal
         open={scriptEditor !== null}
         projectRoot={scriptEditor?.root ?? ''}
@@ -391,186 +467,77 @@ export function ModProjectsPage() {
         </div>
       ) : null}
 
-      {/* <header className="page-header">
-        <h1 className="page-title">Mod projects</h1>
-      </header> */}
+      <header className="mission-page-header">
+        <div className="mission-page-title-row">
+          <h1 className="mission-page-title">Mod projects</h1>
+          <MissionSearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search mod projects..."
+            disabled={loading}
+          />
+          <MissionListStats
+            total={projects.length}
+            visible={sortedProjects.length}
+            hasFilter={Boolean(searchQuery.trim())}
+            itemSingular="mod project"
+            itemPlural="mod projects"
+          />
+        </div>
+        <div className="mission-page-actions">
+          <button type="button" className="btn btn-primary" onClick={() => openCreate()}>
+            + New mod project
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
+            Refresh
+          </button>
+        </div>
+      </header>
 
       {loadError ? (
-        <p className="form-banner form-banner-error" role="alert">
+        <p className="form-banner form-banner-error mission-page-banner" role="alert">
           {loadError}
         </p>
       ) : null}
       {actionErr ? (
-        <p className="form-banner form-banner-error" role="alert">
+        <p className="form-banner form-banner-error mission-page-banner" role="alert">
           {actionErr}
         </p>
       ) : null}
       {saveInfo && !createOpen && !editProject && !deleteTarget ? (
-        <p className="form-banner form-banner-success" role="status">
+        <p className="form-banner form-banner-success mission-page-banner" role="status">
           {saveInfo}
         </p>
       ) : null}
 
-      <div className="card">
-        <div className="mission-list-card-head">
-          <h2 className="card-title">All mod projects</h2>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn btn-primary" onClick={() => openCreate()}>
-              + New mod project
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
-              Refresh
-            </button>
-          </div>
-        </div>
+      {loading ? <p className="mission-page-empty">Loading…</p> : null}
 
-        {loading ? <p className="card-body">Loading…</p> : null}
+      {!loading && projects.length === 0 && !loadError ? (
+        <p className="mission-page-empty">No mod projects yet.</p>
+      ) : null}
 
-        {!loading && projects.length === 0 && !loadError ? (
-          <p className="card-body">No mod projects yet.</p>
-        ) : null}
+      {!loading && projects.length > 0 && sortedProjects.length === 0 ? (
+        <p className="mission-page-empty">No mod projects match &quot;{searchQuery}&quot;</p>
+      ) : null}
 
-        {!loading && projects.length > 0 ? (
-          <ul className="mission-list">
-            {projects.map((p) => (
-              <li key={p.id} className="mission-list-item">
-                <div className="mission-list-row">
-                  <div className="mission-list-main">
-                    <div className="mission-list-title">{(p.name ?? '').trim() || '—'}</div>
-                    <div className="mission-list-meta">
-                      {p.project_path?.trim() ? (
-                        <span className="mission-list-pill mission-list-pill-on">Folder linked</span>
-                      ) : (
-                        <span className="mission-list-pill mission-list-pill-off">No folder</span>
-                      )}
-                    </div>
-                    {p.description?.trim() ? <p className="mission-list-desc">{p.description}</p> : null}
-                    {p.project_path?.trim() ? (
-                      <div className="mod-project-script-row">
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          disabled={loading}
-                          onClick={() => {
-                            const root = p.project_path?.trim()
-                            if (!root) return
-                            setScriptEditor({ root, title: (p.name ?? '').trim() || 'Mod project' })
-                          }}
-                        >
-                          Open in Script Editor
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => openEdit(p)}
-                    title="Edit"
-                    disabled={loading}
-                  >
-                    <FontAwesomeIcon icon={faEdit} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => openDelete(p)}
-                    disabled={loading}
-                    title="Remove from Launchpad"
-                  >
-                    <FontAwesomeIcon icon={faTrash} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => {
-                      setActionErr(null)
-                      void Util.revealPathInExplorer(p.project_path ?? '', p.project_path ?? '').catch((e) =>
-                        setActionErr(e instanceof Error ? e.message : 'Could not open folder'),
-                      )
-                    }}
-                    disabled={!p.project_path?.trim() || loading}
-                    title="Open folder"
-                  >
-                    <FontAwesomeIcon icon={faFolderOpen} />
-                  </button>
-                  <div className="mission-list-menu-anchor" data-mod-row-menu={p.id}>
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      aria-haspopup="menu"
-                      aria-expanded={modMenuOpenId === p.id}
-                      aria-controls={`mod-row-menu-${p.id}`}
-                      id={`mod-row-menu-trigger-${p.id}`}
-                      disabled={loading}
-                      title="More actions"
-                      aria-label="More actions"
-                      onClick={() => setModMenuOpenId((cur) => (cur === p.id ? null : p.id))}
-                    >
-                      <FontAwesomeIcon icon={faEllipsisVertical} />
-                    </button>
-                    {modMenuOpenId === p.id ? (
-                      <ul
-                        className="mission-list-dropdown"
-                        id={`mod-row-menu-${p.id}`}
-                        role="menu"
-                        aria-labelledby={`mod-row-menu-trigger-${p.id}`}
-                      >
-                        <li role="none">
-                          <button
-                            type="button"
-                            className="mission-list-dropdown-item"
-                            role="menuitem"
-                            disabled={!p.project_path?.trim()}
-                            onClick={() => {
-                              const root = p.project_path?.trim()
-                              if (!root) return
-                              setScriptEditor({ root, title: (p.name ?? '').trim() || 'Mod project' })
-                              setModMenuOpenId(null)
-                            }}
-                          >
-                            Open in Script Editor
-                          </button>
-                        </li>
-                        <li role="none">
-                          <button
-                            type="button"
-                            className="mission-list-dropdown-item"
-                            role="menuitem"
-                            disabled={!p.project_path?.trim()}
-                            onClick={() => {
-                              const root = p.project_path?.trim()
-                              if (!root) return
-                              setModMenuOpenId(null)
-                              setActionErr(null)
-                              void (async () => {
-                                const init = await Util.initModProjectHemtt(root, {
-                                  name: (p.name ?? '').trim() || undefined,
-                                })
-                                if (!init.ok) {
-                                  setActionErr(init.error ?? 'Could not add starter build files.')
-                                  return
-                                }
-                                setSaveInfo(
-                                  init.initialized === false
-                                    ? 'Starter build files were already present.'
-                                    : 'Starter build files are ready.',
-                                )
-                              })()
-                            }}
-                          >
-                            Add starter build files
-                          </button>
-                        </li>
-                      </ul>
-                    ) : null}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
+      {!loading && sortedProjects.length > 0 ? (
+        <ModProjectListTable
+          projects={sortedProjects}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={toggleFavorite}
+          columnWidths={columnWidths}
+          onResizeColumn={setColumnWidth}
+          sortField={sortField}
+          sortDir={sortDir}
+          onSort={handleSort}
+          loading={loading}
+          onEdit={openEdit}
+          onOpenFolder={openFolder}
+          onScriptEditor={(root, title) => setScriptEditor({ root, title })}
+          onAddStarter={addStarterForProject}
+          onRemove={openDelete}
+        />
+      ) : null}
     </div>
   )
 }
