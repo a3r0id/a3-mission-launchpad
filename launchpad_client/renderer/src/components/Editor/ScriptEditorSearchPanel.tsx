@@ -506,11 +506,22 @@ export function ScriptEditorSearchPanel({
         : `${matchIndex + 1} of ${count}`
 
   return (
-    <div className="search-panel" role="search" aria-labelledby={panelId}>
-      <div className="search-panel-main">
+    <div
+      className="mb-2 flex shrink-0 flex-col gap-1.5 rounded-[var(--radius)] border border-border bg-surface p-2 sm:p-2.5"
+      role="search"
+      aria-labelledby={panelId}
+    >
+      <div className="flex items-start gap-1.5">
         <button
           type="button"
-          className={`search-panel-expand${showReplace ? ' is-expanded' : ''}`}
+          className={[
+            'mt-0.5 flex h-[26px] w-[18px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] border-0 bg-transparent text-muted transition-[color,transform] duration-100',
+            'hover:enabled:text-heading',
+            'disabled:cursor-default disabled:opacity-40',
+            showReplace && 'rotate-90',
+          ]
+            .filter(Boolean)
+            .join(' ')}
           onClick={() => setShowReplace((v) => !v)}
           aria-expanded={showReplace}
           aria-label={showReplace ? 'Hide replace' : 'Show replace'}
@@ -521,13 +532,13 @@ export function ScriptEditorSearchPanel({
           </svg>
         </button>
 
-        <div className="search-panel-fields">
-          <div className="search-panel-row">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
             <input
               ref={findInputRef}
               id={findFieldId}
               type="text"
-              className="search-panel-input"
+              className="h-7 min-w-0 max-w-80 flex-1 rounded-[var(--radius-sm)] border border-border bg-app px-2 text-xs text-body focus:border-accent focus:outline-none focus:shadow-[0_0_0_2px_color-mix(in_srgb,var(--accent)_25%,transparent)]"
               value={query}
               disabled={disabled}
               onChange={(e) => setQuery(e.target.value)}
@@ -543,10 +554,16 @@ export function ScriptEditorSearchPanel({
               placeholder="Find"
               aria-describedby={statusLabel ? statusId : undefined}
             />
-            <div className="search-panel-options">
+            <div className="flex shrink-0 items-center gap-0.5">
               <button
                 type="button"
-                className={`search-panel-opt${matchCase ? ' is-active' : ''}`}
+                className={[
+                  'flex h-[26px] w-[26px] items-center justify-center rounded-[var(--radius-sm)] border text-[11px] font-semibold font-mono text-muted transition-[background,color,border-color] duration-100',
+                  matchCase
+                    ? 'border-accent bg-accent text-white'
+                    : 'border-transparent bg-transparent hover:bg-app hover:text-heading',
+                  'disabled:cursor-default disabled:opacity-50',
+                ].join(' ')}
                 onClick={() => setMatchCase((v) => !v)}
                 disabled={disabled}
                 title="Match Case"
@@ -556,7 +573,13 @@ export function ScriptEditorSearchPanel({
               </button>
               <button
                 type="button"
-                className={`search-panel-opt${useRegex ? ' is-active' : ''}`}
+                className={[
+                  'flex h-[26px] w-[26px] items-center justify-center rounded-[var(--radius-sm)] border text-[11px] font-semibold font-mono text-muted transition-[background,color,border-color] duration-100',
+                  useRegex
+                    ? 'border-accent bg-accent text-white'
+                    : 'border-transparent bg-transparent hover:bg-app hover:text-heading',
+                  'disabled:cursor-default disabled:opacity-50',
+                ].join(' ')}
                 onClick={() => setUseRegex((v) => !v)}
                 disabled={disabled}
                 title="Use Regular Expression"
@@ -565,13 +588,13 @@ export function ScriptEditorSearchPanel({
                 .*
               </button>
             </div>
-            <span id={statusId} className="search-panel-status" aria-live="polite">
+            <span id={statusId} className="min-w-[60px] shrink-0 text-center text-[11px] text-muted" aria-live="polite">
               {statusLabel}
             </span>
-            <div className="search-panel-nav">
+            <div className="flex shrink-0 items-center gap-0.5">
               <button
                 type="button"
-                className="search-panel-nav-btn"
+                className="flex h-[26px] w-[26px] items-center justify-center rounded-[var(--radius-sm)] border-0 bg-transparent text-muted transition-[background,color] duration-100 hover:enabled:bg-app hover:enabled:text-heading disabled:cursor-default disabled:opacity-40"
                 disabled={disabled || scope !== 'file' || count === 0}
                 onClick={() => goTo(-1)}
                 aria-label="Previous match"
@@ -583,7 +606,7 @@ export function ScriptEditorSearchPanel({
               </button>
               <button
                 type="button"
-                className="search-panel-nav-btn"
+                className="flex h-[26px] w-[26px] items-center justify-center rounded-[var(--radius-sm)] border-0 bg-transparent text-muted transition-[background,color] duration-100 hover:enabled:bg-app hover:enabled:text-heading disabled:cursor-default disabled:opacity-40"
                 disabled={disabled || scope !== 'file' || count === 0}
                 onClick={() => goTo(1)}
                 aria-label="Next match"
@@ -596,7 +619,7 @@ export function ScriptEditorSearchPanel({
             </div>
             <button
               type="button"
-              className="search-panel-close"
+              className="ml-1 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] border-0 bg-transparent text-muted transition-[background,color] duration-100 hover:bg-app hover:text-heading"
               onClick={() => {
                 onOpenChange(false)
                 getShell()?.editor.focus()
@@ -610,12 +633,12 @@ export function ScriptEditorSearchPanel({
           </div>
 
           {showReplace && scope === 'file' && (
-            <div className="search-panel-row search-panel-row-replace">
+            <div className="mt-1.5 flex items-center gap-1.5 pl-0">
               <input
                 ref={replaceInputRef}
                 id={replaceFieldId}
                 type="text"
-                className="search-panel-input"
+                className="h-7 min-w-0 max-w-80 flex-1 border border-border bg-app px-2 text-xs text-body focus:border-accent focus:outline-none focus:shadow-[0_0_0_2px_color-mix(in_srgb,var(--accent)_25%,transparent)] rounded-[var(--radius-sm)]"
                 value={replaceQuery}
                 disabled={disabled}
                 onChange={(e) => setReplaceQuery(e.target.value)}
@@ -631,7 +654,7 @@ export function ScriptEditorSearchPanel({
               />
               <button
                 type="button"
-                className="search-panel-replace-btn"
+                className="h-[26px] shrink-0 rounded-[var(--radius-sm)] border-0 bg-app px-2.5 text-[11px] font-medium text-body transition-[background,color] duration-100 hover:enabled:bg-subtle hover:enabled:text-heading disabled:cursor-default disabled:opacity-50"
                 disabled={disabled || count === 0}
                 onClick={replaceCurrent}
                 title="Replace (Enter)"
@@ -640,7 +663,7 @@ export function ScriptEditorSearchPanel({
               </button>
               <button
                 type="button"
-                className="search-panel-replace-btn"
+                className="h-[26px] shrink-0 rounded-[var(--radius-sm)] border-0 bg-app px-2.5 text-[11px] font-medium text-body transition-[background,color] duration-100 hover:enabled:bg-subtle hover:enabled:text-heading disabled:cursor-default disabled:opacity-50"
                 disabled={disabled || count === 0}
                 onClick={replaceAll}
                 title="Replace All"
@@ -652,9 +675,10 @@ export function ScriptEditorSearchPanel({
         </div>
       </div>
 
-      <div className="search-panel-scope">
-        <label className="search-panel-scope-opt">
+      <div className="mt-1.5 flex items-center gap-3 border-t border-border pt-1.5">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] has-[:checked]:text-body text-muted">
           <input
+            className="m-0"
             type="radio"
             name={panelId + '-scope'}
             checked={scope === 'file'}
@@ -663,8 +687,9 @@ export function ScriptEditorSearchPanel({
           />
           <span>File</span>
         </label>
-        <label className="search-panel-scope-opt">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] has-[:checked]:text-body text-muted">
           <input
+            className="m-0"
             type="radio"
             name={panelId + '-scope'}
             checked={scope === 'project'}
@@ -676,17 +701,21 @@ export function ScriptEditorSearchPanel({
       </div>
 
       {scope === 'project' && query.trim() && !projectBusy && projectHits.length > 0 && (
-        <ul className="search-panel-results">
+        <ul className="scrollbar-subtle m-0 mt-2 max-h-[min(200px,28vh)] list-none space-y-1 overflow-y-auto p-0">
           {projectHits.map((h, i) => (
             <li key={`${h.rel}-${h.line}-${i}`}>
               <button
                 type="button"
-                className="search-panel-result"
+                className="flex w-full flex-col items-stretch gap-0.5 border-0 bg-transparent px-2 py-1.5 text-left text-xs transition-[background] duration-100 [cursor:pointer] rounded-[var(--radius-sm)] hover:enabled:bg-app disabled:cursor-default"
                 disabled={disabled}
                 onClick={() => void onOpenFile(h.rel, { line: h.line })}
               >
-                <span className="search-panel-result-loc">{h.rel}:{h.line}</span>
-                <span className="search-panel-result-preview">{h.preview}</span>
+                <span className="break-all font-mono text-[11px] font-semibold text-accent">
+                  {h.rel}:{h.line}
+                </span>
+                <span className="line-clamp-1 break-words font-mono text-[11px] text-muted [overflow-wrap:break-word]">
+                  {h.preview}
+                </span>
               </button>
             </li>
           ))}

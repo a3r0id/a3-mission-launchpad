@@ -1,0 +1,229 @@
+﻿/* GitHub (local git) panel */
+.mission-github-dialog .mission-edit-surface.mission-github-surface {
+  flex: 1;
+  min-height: min(52vh, 520px);
+  overflow: hidden;
+}
+
+.mission-github-loading {
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.mission-github-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 36%) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .mission-github-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 38vh) minmax(0, 1fr);
+  }
+}
+
+.mission-github-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+@media (max-width: 720px) {
+  .mission-github-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+.mission-github-commit-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px 10px 12px;
+}
+
+.mission-github-empty-list {
+  margin: 12px 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.mission-github-commits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mission-github-commit-row {
+  display: flex;
+  gap: 10px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  align-items: flex-start;
+}
+
+.mission-github-hash {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.mission-github-commit-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.mission-github-subject {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-heading);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.mission-github-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.mission-github-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-surface);
+}
+
+.mission-github-changes-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 16px;
+  overflow: auto;
+}
+
+.mission-github-placeholder {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.mission-github-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-height: min(28vh, 240px);
+  overflow: auto;
+  background: var(--bg-subtle);
+}
+
+.mission-github-file-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.mission-github-file-row:last-child {
+  border-bottom: none;
+}
+
+.mission-github-code {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  min-width: 2.5ch;
+}
+
+.mission-github-path {
+  word-break: break-all;
+  color: var(--text-body);
+}
+
+.mission-github-commit-field {
+  margin-top: 4px;
+}
+
+.mission-github-commit-msg {
+  min-height: 72px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.mission-github-hint {
+  margin: 0;
+}
+
+.mission-github-stack {
+  gap: 16px;
+}
+
+.mission-github-card {
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.mission-github-card-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mission-github-card-text {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-body);
+}
+
+.mission-github-card-note {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mission-github-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.mission-github-link:hover {
+  text-decoration: underline;
+}
+
+.mission-github-publish-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 42rem;
+}
+
+.mission-edit-github-check {
+  margin-top: 8px;
+}
+

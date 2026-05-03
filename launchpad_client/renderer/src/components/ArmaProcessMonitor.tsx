@@ -264,15 +264,10 @@ export function ArmaProcessMonitor() {
   }, [rows, uid, busyKillPid, killErrByPid, onForceStopSession])
 
   return (
-    <section className="card testing-card proc-monitor">
-      <div className="proc-monitor-header">
-        <div>
-          <h2 className="card-title proc-monitor-title">Session radar</h2>
-          {/* <p className="proc-monitor-lead">
-            Live load and memory for every game process on this machine. Pause anytime—nothing leaves your PC.
-          </p> */}
-        </div>
-        <div className="proc-monitor-controls">
+    <section className="border-t border-border pt-6">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Session radar</h2>
+        <div className="flex items-center gap-2">
           <span
             className={`proc-live-pill${live ? ' proc-live-pill--on' : ''}`}
             title={live ? 'Refreshing' : 'Idle'}
@@ -282,35 +277,31 @@ export function ArmaProcessMonitor() {
           </span>
           <button
             type="button"
-            className="btn btn-ghost proc-pause-btn"
+            className="btn btn-ghost btn-xs"
             onClick={() => setPaused((p) => !p)}
           >
             {paused ? 'Resume' : 'Pause'}
           </button>
-          <button type="button" className="btn btn-ghost proc-pause-btn" onClick={() => void tick()}>
+          <button type="button" className="btn btn-ghost btn-xs" onClick={() => void tick()}>
             Refresh now
           </button>
         </div>
       </div>
 
-      {pollErr ? (
-        <p className="form-banner form-banner-error" role="alert">
+      {pollErr && (
+        <p className="mb-3 rounded border border-danger/25 bg-danger/10 px-2.5 py-2 text-xs text-danger" role="alert">
           {pollErr}
         </p>
-      ) : null}
+      )}
 
-      {sampledAt != null ? (
-        <p className="proc-sampled">
+      {sampledAt != null && (
+        <p className="mb-3 text-[11px] text-muted">
           Last sample <time dateTime={new Date(sampledAt).toISOString()}>{new Date(sampledAt).toLocaleTimeString()}</time>
         </p>
-      ) : null}
+      )}
 
       {rows.length === 0 && !pollErr ? (
-        <div className="proc-empty">
-          <div className="proc-empty-icon" aria-hidden />
-          <p className="proc-empty-title">No Arma 3 runtime processes detected</p>
-          {/* <p className="proc-empty-hint">Launch from above and this board lights up automatically.</p> */}
-        </div>
+        <p className="py-6 text-center text-sm text-muted">No Arma 3 runtime processes detected</p>
       ) : (
         <div className="proc-card-grid">{cards}</div>
       )}

@@ -18,13 +18,19 @@ export function MissionListStats({
   const itemWord = total === 1 ? itemSingular : itemPlural
   if (!hasFilter) {
     return (
-      <p className="mission-list-stats" aria-live="polite">
+      <p
+        className="m-0 whitespace-nowrap text-[13px] text-muted"
+        aria-live="polite"
+      >
         {total} {itemWord}
       </p>
     )
   }
   return (
-    <p className="mission-list-stats" aria-live="polite">
+    <p
+      className="m-0 whitespace-nowrap text-[13px] text-muted"
+      aria-live="polite"
+    >
       Showing {visible} of {total} {itemWord}
     </p>
   )

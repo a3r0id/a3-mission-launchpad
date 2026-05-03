@@ -1,0 +1,201 @@
+﻿.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-heading);
+  box-shadow: var(--shadow-sm);
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: rgba(9, 105, 218, 0.45);
+  color: #ffffff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: rgba(5, 80, 174, 0.55);
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-primary {
+    border-color: rgba(88, 166, 255, 0.35);
+    color: #f6f8fa;
+  }
+}
+
+.btn-ghost {
+  background: transparent;
+  box-shadow: none;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--border);
+}
+
+.btn-xs {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+.form-card .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.form-card .field:last-of-type {
+  margin-bottom: 4px;
+}
+
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.field-input {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.field-input:hover {
+  border-color: var(--border-strong);
+}
+
+.field-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus);
+}
+
+.field-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.form-banner {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+
+.form-banner-error {
+  background: var(--danger-soft);
+  border: 1px solid rgba(207, 34, 46, 0.25);
+  color: var(--text-heading);
+}
+
+.form-banner-success {
+  background: rgba(26, 127, 55, 0.12);
+  border: 1px solid rgba(26, 127, 55, 0.28);
+  color: var(--text-heading);
+}
+
+.form-banner-warning {
+  background: rgba(191, 135, 0, 0.14);
+  border: 1px solid rgba(191, 135, 0, 0.3);
+  color: var(--text-heading);
+}
+
+.mission-list-edit {
+  margin-top: 4px;
+  padding: 14px 14px 12px;
+}
+
+.result-card.is-ok {
+  border-color: rgba(26, 127, 55, 0.35);
+}
+
+.result-card.is-err {
+  border-color: rgba(207, 34, 46, 0.35);
+}
+
+.result-dl {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.result-dl > div {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.result-dl dt {
+  margin: 0;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.result-dl dd {
+  margin: 0;
+  color: var(--text-heading);
+}
+
+.result-lists {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.result-list-title {
+  font-weight: 600;
+  color: var(--text-heading);
+  margin-bottom: 6px;
+}
+
+.result-lists ul {
+  margin: 0 0 10px;
+  padding-left: 18px;
+}
+
+.result-lists li {
+  margin-bottom: 4px;
+}
+
+
+.btn-primary .btn-busy-spinner {
+  --lp-spinner-color: #ffffff;
+}
+

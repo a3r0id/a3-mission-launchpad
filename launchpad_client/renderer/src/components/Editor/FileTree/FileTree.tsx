@@ -69,6 +69,9 @@ export type FileTreeProps = {
   onRequestDuplicate?: (rel: string) => void
   onCopyPath?: (rel: string) => void
   onRevealInExplorer?: (rel: string) => void
+  onOpenVSCode?: (rel: string) => void
+  onOpenCursor?: (rel: string) => void
+  onRefresh?: () => void
   onMove?: (sourceRel: string, targetDirRel: string) => void | Promise<void>
   onExpandAll?: () => void
   onCollapseAll?: () => void
@@ -142,9 +145,10 @@ function TreeBranch({
   const dropClass = getDropClass?.(rel) ?? ''
   
   const isBeingEdited = inlineEditState?.rel === rel && inlineEditState.mode === 'rename'
+  const expectedNewRel = rel ? `${rel}/__new__` : '__new__'
   const hasNewItemPlaceholder = isDir && inlineEditState && 
     (inlineEditState.mode === 'new-file' || inlineEditState.mode === 'new-folder') &&
-    inlineEditState.rel === `${rel}/__new__`
+    inlineEditState.rel === expectedNewRel
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
@@ -162,14 +166,23 @@ function TreeBranch({
 
   return (
     <li
-      className={`file-tree-item${isDir && open ? ' is-expanded' : ''}${dropClass ? ` ${dropClass}` : ''}`}
+      className={[
+        "group list-none",
+        isDir && open ? "is-expanded" : "",
+        dropClass,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={{ paddingLeft: depth <= 2 ? depth * 12 : 24 + (depth - 2) * 8 }}
     >
       {isDir ? (
-        <div className="file-tree-line">
+        <div className="my-px flex w-full items-center gap-1">
           {isBeingEdited ? (
-            <div className="file-tree-row file-tree-row-dir file-tree-row-editing">
-              <span className="file-tree-toggle" aria-hidden />
+            <div className="file-tree-row-editing flex items-center gap-1 rounded-sm bg-accent-soft px-1 py-0.5 outline outline-1 -outline-offset-1 outline-[rgba(9,105,218,0.4)] dark:outline-[rgba(88,166,255,0.5)]">
+              <span
+                className="inline-flex size-[18px] shrink-0 items-center justify-center text-muted before:ml-0.5 before:block before:h-0 before:w-0 before:border-y-[4px] before:border-y-transparent before:border-l-[5px] before:border-l-current before:transition-transform before:duration-150 before:ease-in-out group-[.is-expanded]:before:rotate-90"
+                aria-hidden
+              />
               <FolderIcon isOpen={open} />
               <InlineEditInput
                 initialValue={inlineEditState.initialValue}
@@ -181,7 +194,11 @@ function TreeBranch({
           ) : (
             <button
               type="button"
-              className="file-tree-row file-tree-row-dir file-tree-row-main"
+              data-tree-item
+              className={[
+                'file-tree-row flex min-w-0 flex-1 items-center gap-1 rounded-md border-0 bg-transparent py-1.5 pr-2 pl-2 text-left text-xs font-semibold leading-snug text-heading transition-[background,outline] duration-100 ease-in-out hover:bg-surface',
+                enableDragDrop && !disabled ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+              ].join(' ')}
               onClick={() => toggle(rel)}
               onContextMenu={handleContextMenu}
               aria-expanded={open}
@@ -192,18 +209,21 @@ function TreeBranch({
               onDrop={dragHandlers?.onDrop}
               onDragEnd={dragHandlers?.onDragEnd}
             >
-              <span className="file-tree-toggle" aria-hidden />
+              <span
+                className="inline-flex size-[18px] shrink-0 items-center justify-center text-muted before:ml-0.5 before:block before:h-0 before:w-0 before:border-y-[4px] before:border-y-transparent before:border-l-[5px] before:border-l-current before:transition-transform before:duration-150 before:ease-in-out group-[.is-expanded]:before:rotate-90"
+                aria-hidden
+              />
               <FolderIcon isOpen={open} />
-              <span className="file-tree-name">{node.name}</span>
-              {node.truncated ? <span className="file-tree-meta">…</span> : null}
+              <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{node.name}</span>
+              {node.truncated ? <span className="ml-1 shrink-0 text-[10px] font-medium text-muted">…</span> : null}
             </button>
           )}
         </div>
       ) : (
-        <div className="file-tree-line">
+        <div className="my-px flex w-full items-center gap-1">
           {isBeingEdited ? (
-            <div className="file-tree-row file-tree-row-file file-tree-row-editing is-selected">
-              <span className="file-tree-toggle file-tree-toggle-spacer" aria-hidden />
+            <div className="file-tree-row-editing is-selected flex min-w-0 flex-1 items-center gap-1 rounded-sm bg-accent-soft px-1 py-0.5 outline outline-1 -outline-offset-1 outline-[rgba(9,105,218,0.4)] dark:outline-[rgba(88,166,255,0.5)]">
+              <span className="invisible inline-flex size-[18px] shrink-0" aria-hidden />
               <FileIcon filename={node.name} />
               <InlineEditInput
                 initialValue={inlineEditState.initialValue}
@@ -216,7 +236,16 @@ function TreeBranch({
             <button
               ref={rowRef}
               type="button"
-              className={`file-tree-row file-tree-row-file file-tree-row-main${selected ? ' is-selected' : ''}`}
+              data-tree-item
+              className={[
+                'file-tree-row flex min-w-0 flex-1 items-center gap-1 rounded-md border-0 bg-transparent py-1.5 pr-2 pl-2 text-left text-xs leading-snug text-body transition-[background,outline] duration-100 ease-in-out hover:bg-surface',
+                enableDragDrop && !disabled ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+                selected
+                  ? 'bg-accent-soft outline outline-1 -outline-offset-1 outline-[rgba(9,105,218,0.25)] dark:outline-[rgba(88,166,255,0.35)]'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               onClick={(e) => onSelectFile(rel, e)}
               onContextMenu={handleContextMenu}
               onMouseEnter={handleMouseEnter}
@@ -228,29 +257,33 @@ function TreeBranch({
               onDrop={dragHandlers?.onDrop}
               onDragEnd={dragHandlers?.onDragEnd}
             >
-              <span className="file-tree-toggle file-tree-toggle-spacer" aria-hidden />
+              <span className="invisible inline-flex size-[18px] shrink-0" aria-hidden />
               <FileIcon filename={node.name} />
-              <span className="file-tree-name">{node.name}</span>
+              <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{node.name}</span>
               {busyFileRel === rel ? (
-                <span className="file-tree-busy" aria-hidden>
+                <span className="ml-1 inline-flex shrink-0" aria-hidden>
                   <Spinner size={14} color="var(--text-muted)" />
                 </span>
               ) : null}
-              {node.size != null ? <span className="file-tree-meta">{formatSize(node.size)}</span> : null}
+              {node.size != null ? (
+                <span className="ml-1 shrink-0 text-[10px] font-medium text-muted">{formatSize(node.size)}</span>
+              ) : null}
             </button>
           )}
         </div>
       )}
       {isDir && open && (
-        <ul className="file-tree-list file-tree-nested">
+        <ul className="m-0 list-none pl-1">
           {hasNewItemPlaceholder && inlineEditState && (
             <li
-              className="file-tree-item"
+              className="list-none"
               style={{ paddingLeft: (depth + 1) <= 2 ? (depth + 1) * 12 : 24 + ((depth + 1) - 2) * 8 }}
             >
-              <div className="file-tree-line">
-                <div className={`file-tree-row file-tree-row-${inlineEditState.mode === 'new-folder' ? 'dir' : 'file'} file-tree-row-editing is-selected`}>
-                  <span className="file-tree-toggle file-tree-toggle-spacer" aria-hidden />
+              <div className="my-px flex w-full items-center gap-1">
+                <div
+                  className={`is-selected file-tree-row-editing flex min-w-0 flex-1 items-center gap-1 rounded-sm bg-accent-soft px-1 py-0.5 outline outline-1 -outline-offset-1 outline-[rgba(9,105,218,0.4)] dark:outline-[rgba(88,166,255,0.5)] ${inlineEditState.mode === 'new-folder' ? 'font-semibold text-heading' : 'text-body'}`}
+                >
+                  <span className="invisible inline-flex size-[18px] shrink-0" aria-hidden />
                   {inlineEditState.mode === 'new-folder' ? (
                     <FolderIcon isOpen={false} />
                   ) : (
@@ -311,6 +344,9 @@ export function FileTree({
   onRequestDuplicate,
   onCopyPath,
   onRevealInExplorer,
+  onOpenVSCode,
+  onOpenCursor,
+  onRefresh,
   onMove,
   getPreviewData,
   disabled,
@@ -346,9 +382,19 @@ export function FileTree({
     })
 
   const handleContextMenu = useCallback(
-    (rel: string, kind: 'file' | 'dir', e: React.MouseEvent) => {
+    (rel: string, kind: 'file' | 'dir' | 'root', e: React.MouseEvent) => {
       if (!enableContextMenu) return
       setContextMenuTarget({ rel, kind, x: e.clientX, y: e.clientY })
+    },
+    [enableContextMenu],
+  )
+
+  const handleRootContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!enableContextMenu) return
+      if ((e.target as HTMLElement).closest('[data-tree-item]')) return
+      e.preventDefault()
+      setContextMenuTarget({ rel: '', kind: 'root', x: e.clientX, y: e.clientY })
     },
     [enableContextMenu],
   )
@@ -359,19 +405,23 @@ export function FileTree({
   }, [])
 
   const handleContextMenuAction = useCallback(
-    (action: ContextMenuAction, rel: string, kind: 'file' | 'dir') => {
+    (action: ContextMenuAction, rel: string, kind: 'file' | 'dir' | 'root') => {
       switch (action) {
-        case 'new-file':
-          onRequestNewFile(rel)
+        case 'new-file': {
+          const targetDir = kind === 'dir' ? rel : kind === 'root' ? '' : parentDirRel(rel)
+          onRequestNewFile(targetDir)
           break
-        case 'new-folder':
-          onRequestNewFolder?.(rel)
+        }
+        case 'new-folder': {
+          const targetDir = kind === 'dir' ? rel : kind === 'root' ? '' : parentDirRel(rel)
+          onRequestNewFolder?.(targetDir)
           break
+        }
         case 'rename':
-          onRequestRename(rel, findNodeName(rel))
+          if (kind !== 'root') onRequestRename(rel, findNodeName(rel))
           break
         case 'delete':
-          onRequestDelete?.(rel, kind)
+          if (kind !== 'root') onRequestDelete?.(rel, kind as 'file' | 'dir')
           break
         case 'duplicate':
           onRequestDuplicate?.(rel)
@@ -382,9 +432,18 @@ export function FileTree({
         case 'reveal':
           onRevealInExplorer?.(rel)
           break
+        case 'open-vscode':
+          onOpenVSCode?.(rel)
+          break
+        case 'open-cursor':
+          onOpenCursor?.(rel)
+          break
+        case 'refresh':
+          onRefresh?.()
+          break
       }
     },
-    [onRequestNewFile, onRequestNewFolder, onRequestRename, onRequestDelete, onRequestDuplicate, onCopyPath, onRevealInExplorer, findNodeName],
+    [onRequestNewFile, onRequestNewFolder, onRequestRename, onRequestDelete, onRequestDuplicate, onCopyPath, onRevealInExplorer, onOpenVSCode, onOpenCursor, onRefresh, findNodeName],
   )
 
   const handleFileSelect = useCallback(
@@ -406,7 +465,7 @@ export function FileTree({
 
   return (
     <>
-      <ul className="file-tree-list file-tree-root">
+      <ul className="m-0 min-h-full list-none py-1" onContextMenu={handleRootContextMenu}>
         <TreeBranch
           node={tree}
           depth={0}

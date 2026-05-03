@@ -8,7 +8,6 @@ import { Spinner } from './Spinner'
 import { ScriptEditorSearchPanel } from './Editor/ScriptEditorSearchPanel'
 import { ScriptEditorTabs, type OpenFileTab } from './Editor/ScriptEditorTabs'
 import { ScriptEditorGoTo } from './Editor/ScriptEditorGoTo'
-import { ScriptEditorToolbar } from './Editor/ScriptEditorToolbar'
 import { FileTree, fileBasename, parentDirRel, ancestorDirRelPathsForFile, firstFileRelDepthFirst, isPaaRel, isP3dRel } from './Editor/FileTree/FileTree'
 import { type InlineEditState } from './Editor/FileTree/FileTreeInlineEdit'
 import { useAppPreferences } from '../context/AppPreferencesContext'
@@ -17,7 +16,7 @@ import {
   missionMonacoTheme,
   missionResourceLanguage,
 } from '../missionMonacoSetup'
-import Util, { type HemttDiagnostic } from '../Util'
+import Util, { type HemttDiagnostic } from '../utils'
 
 const LS_SHOW_MINIMAP = 'launchpad.editorShowMinimap'
 const LS_SHOW_FOLDING = 'launchpad.editorShowFolding'
@@ -194,9 +193,13 @@ type Props = {
   disabled?: boolean
   /** ``mod`` enables HEMTT project checks and a problems list; ``mission`` keeps editor-only behaviour. */
   environment?: ScriptEditorEnvironment
+  contextTitle?: string
+  fullscreen?: boolean
+  onFullscreenToggle?: () => void
+  onClose?: () => void
 }
 
-export function MissionResourceBrowser({ projectRoot, disabled, environment = 'mission' }: Props) {
+export function MissionResourceBrowser({ projectRoot, disabled, environment = 'mission', contextTitle, fullscreen, onFullscreenToggle, onClose }: Props) {
   const { useSyntaxHighlighting } = useAppPreferences()
   const [tree, setTree] = useState<ProjectTreeNode | null>(null)
   const [truncated, setTruncated] = useState(false)
@@ -221,7 +224,8 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
   } | null>(null)
   const [fileErr, setFileErr] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
-  const [savingFile, setSavingFile] = useState(false)
+  const [savingRel, setSavingRel] = useState<string | null>(null)
+  const [bufferVersion, setBufferVersion] = useState(0)
   const [monacoReady, setMonacoReady] = useState(false)
   const [lintDiagnostics, setLintDiagnostics] = useState<HemttDiagnostic[]>([])
   const [lintRunning, setLintRunning] = useState(false)
@@ -231,6 +235,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
   const lintSeqRef = useRef(0)
   const selectedRelRef = useRef<string | null>(null)
   const fileContentRef = useRef('')
+  const originalContentRef = useRef('')
   const dirtyRef = useRef(false)
   const openFileBuffersRef = useRef(new Map<string, { text: string; dirty: boolean }>())
   const initialTreeSelectionDoneRef = useRef(false)
@@ -257,8 +262,8 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
   const [goToMode, setGoToMode] = useState<'line' | 'symbol'>('line')
   const [searchPanelFocusTick, setSearchPanelFocusTick] = useState(0)
   const [editorReadyTick, setEditorReadyTick] = useState(0)
-  const [showMinimap, setShowMinimap] = useState(readStoredMinimap)
-  const [showFolding, setShowFolding] = useState(readStoredFolding)
+  const [showMinimap] = useState(readStoredMinimap)
+  const [showFolding] = useState(readStoredFolding)
   const searchPanelOpenRef = useRef(false)
   const goToOpenRef = useRef(false)
   const [inlineEditState, setInlineEditState] = useState<InlineEditState>(null)
@@ -287,42 +292,22 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
   }, [selectedRel])
 
   const openTabs = useMemo<OpenFileTab[]>(() => {
+    void bufferVersion
     const tabs: OpenFileTab[] = []
     openFileBuffersRef.current.forEach((buf, rel) => {
       if (!isPaaRel(rel) && !isP3dRel(rel)) {
-        tabs.push({ rel, dirty: buf.dirty })
+        tabs.push({ rel, dirty: rel === selectedRel ? dirty : buf.dirty })
       }
     })
     if (selectedRel && !isPaaRel(selectedRel) && !isP3dRel(selectedRel)) {
       if (!tabs.some((t) => t.rel === selectedRel)) {
-        tabs.push({ rel: selectedRel, dirty })
-      } else {
-        const t = tabs.find((t) => t.rel === selectedRel)
-        if (t) t.dirty = dirty
+        const buf = openFileBuffersRef.current.get(selectedRel)
+        tabs.push({ rel: selectedRel, dirty: buf ? buf.dirty : false })
       }
     }
     return tabs
-  }, [selectedRel, dirty, fileContent])
+  }, [selectedRel, dirty, bufferVersion])
 
-  const handleMinimapToggle = useCallback(() => {
-    setShowMinimap((v) => {
-      const next = !v
-      try {
-        localStorage.setItem(LS_SHOW_MINIMAP, String(next))
-      } catch {}
-      return next
-    })
-  }, [])
-
-  const handleFoldingToggle = useCallback(() => {
-    setShowFolding((v) => {
-      const next = !v
-      try {
-        localStorage.setItem(LS_SHOW_FOLDING, String(next))
-      } catch {}
-      return next
-    })
-  }, [])
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 721px)')
@@ -563,7 +548,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
             setSelectedRel(newRel)
           }
         } else if (mode === 'new-file') {
-          const parentRel = rel.replace('/__new__', '')
+          const parentRel = rel === '__new__' ? '' : rel.replace('/__new__', '')
           const newRel = parentRel ? `${parentRel}/${newName}` : newName
           const abs = joinProjectPath(projectRoot, newRel)
           await Util.createFile(abs, '')
@@ -587,6 +572,60 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
   const handleInlineEditCancel = useCallback(() => {
     setInlineEditState(null)
   }, [])
+
+  const handleDelete = useCallback(async (rel: string, kind: 'file' | 'dir') => {
+    if (disabled) return
+    if (kind === 'dir') {
+      setFileErr('Deleting folders is not yet supported. Use File Explorer.')
+      return
+    }
+    const abs = joinProjectPath(projectRoot, rel)
+    try {
+      await Util.deleteFile(abs)
+      openFileBuffersRef.current.delete(rel)
+      if (selectedRelRef.current === rel) {
+        setSelectedRel(null)
+        setFileContent('')
+        setDirty(false)
+      }
+      await reloadTreeOnly()
+    } catch (e) {
+      setFileErr(e instanceof Error ? e.message : 'Could not delete')
+    }
+  }, [disabled, projectRoot, reloadTreeOnly])
+
+  const handleRevealInExplorer = useCallback((rel: string) => {
+    const abs = joinProjectPath(projectRoot, rel || '')
+    void Util.runCommand(`explorer /select,${JSON.stringify(abs)}`)
+  }, [projectRoot])
+
+  const handleCopyPath = useCallback((rel: string) => {
+    const abs = joinProjectPath(projectRoot, rel)
+    void navigator.clipboard.writeText(abs)
+  }, [projectRoot])
+
+  const handleOpenVSCode = useCallback((rel: string) => {
+    const abs = joinProjectPath(projectRoot, rel || '')
+    void Util.runCommand(`code ${JSON.stringify(abs)}`)
+  }, [projectRoot])
+
+  const handleOpenCursor = useCallback((rel: string) => {
+    const abs = joinProjectPath(projectRoot, rel || '')
+    void Util.runCommand(`cursor ${JSON.stringify(abs)}`)
+  }, [projectRoot])
+
+  const handleDuplicate = useCallback((_rel: string) => {
+    if (disabled) return
+    setFileErr('Duplicate is not yet implemented.')
+  }, [disabled])
+
+  const beginNewFolder = useCallback(
+    (_parentRel: string) => {
+      if (disabled) return
+      setFileErr('Creating folders is not yet supported. Use File Explorer.')
+    },
+    [disabled],
+  )
 
   useEffect(() => {
     if (!pathDialog) return
@@ -668,6 +707,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
           setFileErr(null)
           setFileLoading(false)
           setFileContent(cached.text)
+          originalContentRef.current = cached.dirty ? originalContentRef.current : cached.text
           setDirty(cached.dirty)
           setTexturePreview(null)
           setMeshPreview(null)
@@ -713,6 +753,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
         } else {
           setFileContent('')
           const text = await Util.getFileContents(abs)
+          originalContentRef.current = text
           setFileContent(text)
           openFileBuffersRef.current.set(rel, { text, dirty: false })
         }
@@ -742,6 +783,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
         return
       }
       openFileBuffersRef.current.delete(rel)
+      setBufferVersion((v) => v + 1)
       if (selectedRel === rel) {
         const remaining = Array.from(openFileBuffersRef.current.keys()).filter(
           (r) => !isPaaRel(r) && !isP3dRel(r),
@@ -946,28 +988,37 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
     void openFile(first)
   }, [tree, treeLoading, treeErr, openFile])
 
-  async function saveFile() {
-    if (!selectedRel) return
-    if (isPaaRel(selectedRel) || isP3dRel(selectedRel)) return
-    setSavingFile(true)
+  const saveFile = useCallback(async (relToSave?: string) => {
+    const rel = relToSave ?? selectedRel
+    if (!rel) return
+    if (isPaaRel(rel) || isP3dRel(rel)) return
+    setSavingRel(rel)
     setFileErr(null)
-    const abs = joinProjectPath(projectRoot, selectedRel)
+    const abs = joinProjectPath(projectRoot, rel)
     try {
-      await Util.setFileContents(abs, fileContent)
-      setDirty(false)
-      openFileBuffersRef.current.set(selectedRel, { text: fileContent, dirty: false })
+      const contentToSave = rel === selectedRel ? fileContent : openFileBuffersRef.current.get(rel)?.text ?? ''
+      await Util.setFileContents(abs, contentToSave)
+      if (rel === selectedRel) {
+        originalContentRef.current = contentToSave
+        setDirty(false)
+      }
+      openFileBuffersRef.current.set(rel, { text: contentToSave, dirty: false })
+      setBufferVersion((v) => v + 1)
     } catch (e) {
       setFileErr(e instanceof Error ? e.message : 'Could not save file')
     } finally {
-      setSavingFile(false)
+      setSavingRel(null)
     }
-  }
+  }, [projectRoot, selectedRel, fileContent])
 
   if (treeLoading) {
     return (
-      <div className="mission-resource-loading">
-        <div className="mission-resource-loading-bar" />
-        <p className="mission-resource-loading-text">Scanning project folder…</p>
+      <div className="px-5 py-8 text-center">
+        <div
+          className="mx-auto mb-3.5 h-[3px] w-full max-w-[200px] rounded-full bg-gradient-to-r from-border via-accent to-border bg-[length:200%_100%]"
+          style={{ animation: "mission-resource-shimmer 1.1s ease-in-out infinite" }}
+        />
+        <p className="m-0 text-[13px] text-muted">Scanning project folder…</p>
       </div>
     )
   }
@@ -992,46 +1043,33 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
   }
 
   return (
-    <div className="mission-resource-browser">
-      <div className="mission-resource-layout" ref={layoutRef}>
+    <div className="box-border flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col">
+      <div
+        className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-row max-[720px]:flex-col"
+        ref={layoutRef}
+      >
         <aside
-          className="mission-resource-sidebar"
+          className="flex min-h-0 min-w-0 max-w-full flex-col bg-subtle max-[720px]:max-h-[min(240px,40vh)] max-[720px]:min-h-0 max-[720px]:border-b"
           style={wideLayout ? { flex: `0 0 ${sidebarWidth}px`, width: sidebarWidth } : undefined}
         >
-          <div className="mission-resource-sidebar-head">
-            <span className="mission-resource-sidebar-title">Files</span>
-            <div className="mission-resource-sidebar-tools">
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                disabled={disabled}
-                onClick={() => beginNewFile(selectedRel ? parentDirRel(selectedRel) : '')}
-              >
-                New file
-              </button>
-              <button type="button" className="btn btn-ghost btn-sm" disabled={disabled} onClick={() => void loadTree()}>
-                Refresh
-              </button>
-            </div>
-          </div>
           {pathDialog ? (
             <div
-              className="mission-resource-path-sheet"
+              className="border-b border-border bg-surface px-3.5 py-3"
               role="dialog"
               aria-modal="true"
               aria-labelledby={pathDialogTitleId}
             >
-              <p id={pathDialogTitleId} className="mission-resource-path-sheet-title">
+              <p id={pathDialogTitleId} className="m-0 mb-2 text-[13px] font-semibold text-heading">
                 {pathDialog.kind === 'new' ? 'New file' : 'Rename file'}
               </p>
-              <label htmlFor={pathDialogFieldId} className="mission-resource-path-sheet-label">
+              <label htmlFor={pathDialogFieldId} className="mb-1 block text-[11px] font-semibold text-muted">
                 Name
               </label>
               <input
                 ref={pathInputRef}
                 id={pathDialogFieldId}
                 type="text"
-                className="field-input mission-resource-path-sheet-input"
+                className="field-input box-border mb-1.5 w-full"
                 autoComplete="off"
                 value={pathDialogInput}
                 disabled={pathActionBusy}
@@ -1044,14 +1082,14 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                 }}
               />
               {pathDialog.kind === 'new' && pathDialog.parentRel ? (
-                <p className="mission-resource-path-sheet-hint">Folder: {pathDialog.parentRel}/</p>
+                <p className="m-0 mb-2 [word-break:break-all] text-[11px] text-muted">Folder: {pathDialog.parentRel}/</p>
               ) : null}
               {pathActionErr ? (
-                <p className="form-banner form-banner-error mission-resource-path-sheet-err" role="alert">
+                <p className="form-banner form-banner-error m-0 mb-2" role="alert">
                   {pathActionErr}
                 </p>
               ) : null}
-              <div className="mission-resource-path-sheet-actions">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
@@ -1072,9 +1110,9 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
             </div>
           ) : null}
           {truncated ? (
-            <p className="mission-resource-truncate-note">Large tree truncated for performance.</p>
+            <p className="m-0 border-b border-border px-3.5 py-2 text-[11px] text-muted">Large tree truncated for performance.</p>
           ) : null}
-          <div className="mission-resource-tree-wrap">
+          <div className="scrollbar-subtle min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-auto overscroll-y-contain py-1.5 pr-1 pb-2.5 pl-1 [-webkit-overflow-scrolling:touch]">
             <FileTree
               tree={tree}
               expanded={expanded}
@@ -1087,7 +1125,15 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
               onToggle={toggle}
               onSelectFile={(rel) => void openFile(rel)}
               onRequestNewFile={beginNewFile}
+              onRequestNewFolder={beginNewFolder}
               onRequestRename={beginRenameFile}
+              onRequestDuplicate={(rel) => void handleDuplicate(rel)}
+              onRequestDelete={handleDelete}
+              onCopyPath={handleCopyPath}
+              onRevealInExplorer={handleRevealInExplorer}
+              onOpenVSCode={handleOpenVSCode}
+              onOpenCursor={handleOpenCursor}
+              onRefresh={() => void loadTree()}
               disabled={disabled}
               inlineEditState={inlineEditState}
               onInlineEditConfirm={handleInlineEditConfirm}
@@ -1098,61 +1144,38 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
         {wideLayout ? (
           <button
             type="button"
-            className="mission-resource-split mission-resource-split-v"
+            className="m-0 shrink-0 self-stretch border-0 bg-border p-0 [flex:0_0_1px] [touch-action:none] w-px cursor-col-resize hover:bg-accent focus:outline-none"
             aria-orientation="vertical"
             aria-label="Resize panels"
             onPointerDown={onSidebarResizePointerDown}
             style={{ touchAction: 'none' }}
           />
         ) : null}
-        <section className="mission-resource-editor">
-          <div className="mission-resource-editor-head">
-            <h3 className="mission-resource-editor-title">Editor</h3>
-          </div>
-          {openTabs.length > 0 && (
-            <ScriptEditorTabs
-              tabs={openTabs}
-              activeRel={selectedRel}
-              onSelectTab={(rel) => void openFile(rel)}
-              onCloseTab={handleCloseTab}
-              disabled={disabled}
-            />
-          )}
+        <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col bg-surface">
+          <ScriptEditorTabs
+            tabs={openTabs}
+            activeRel={selectedRel}
+            onSelectTab={(rel) => void openFile(rel)}
+            onCloseTab={handleCloseTab}
+            onSaveTab={(rel) => void saveFile(rel)}
+            disabled={disabled}
+            savingRel={savingRel}
+            contextTitle={contextTitle}
+            fullscreen={fullscreen}
+            onFullscreenToggle={onFullscreenToggle}
+            onClose={onClose}
+          />
           {!selectedRel ? (
-            <div className="mission-resource-placeholder">
-              <p className="mission-resource-placeholder-title">Select a file</p>
-              <p className="mission-resource-placeholder-text">Choose a file in the tree to view or edit its contents.</p>
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-8 text-center">
+              <p className="m-0 text-[15px] font-semibold text-heading">Select a file</p>
+              <p className="m-0 mt-1 max-w-[36ch] text-[13px] leading-normal text-muted">
+                Choose a file in the tree to view or edit its contents.
+              </p>
             </div>
           ) : (
-            <div
-              className={`mission-resource-editor-body${environment === 'mod' ? ' mission-resource-editor-body-mod' : ''}`}
-            >
-              <ScriptEditorToolbar
-                selectedRel={selectedRel}
-                dirty={dirty}
-                disabled={disabled}
-                fileLoading={fileLoading}
-                savingFile={savingFile}
-                showMinimap={showMinimap}
-                showFolding={showFolding}
-                onGoToLineClick={() => {
-                  setSearchPanelOpen(false)
-                  setGoToMode('line')
-                  setGoToOpen(true)
-                }}
-                onGoToSymbolClick={() => {
-                  setSearchPanelOpen(false)
-                  setGoToMode('symbol')
-                  setGoToOpen(true)
-                }}
-                onMinimapToggle={handleMinimapToggle}
-                onFoldingToggle={handleFoldingToggle}
-                onRenameClick={() => beginRenameFile(selectedRel, selectedRel ? fileBasename(selectedRel) : undefined)}
-                onSaveClick={() => void saveFile()}
-                isImageOrMesh={texturePreview != null || meshPreview != null}
-              />
+            <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden">
               {fileErr ? (
-                <p className="form-banner form-banner-error mission-resource-file-err" role="alert">
+                <p className="form-banner form-banner-error m-0 mx-2 mt-2" role="alert">
                   {fileErr}
                 </p>
               ) : null}
@@ -1168,7 +1191,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                 onOpenFile={(rel, focus) => void openFile(rel, focus)}
                 onDocumentChange={(newText) => {
                   setFileContent(newText)
-                  setDirty(true)
+                  setDirty(newText !== originalContentRef.current)
                 }}
                 disabled={disabled}
                 focusTick={searchPanelFocusTick}
@@ -1182,14 +1205,17 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                 disabled={disabled}
               />
               {fileLoading && selectedRel && (isPaaRel(selectedRel) || isP3dRel(selectedRel)) ? (
-                <div className="mission-resource-loading mission-resource-loading-inline">
-                  <div className="mission-resource-loading-bar" />
-                  <p className="mission-resource-loading-text">Loading preview…</p>
+                <div className="px-3 py-6 text-center">
+                  <div
+                    className="mx-auto mb-3.5 h-[3px] w-full max-w-[200px] rounded-full bg-gradient-to-r from-border via-accent to-border bg-[length:200%_100%]"
+                    style={{ animation: "mission-resource-shimmer 1.1s ease-in-out infinite" }}
+                  />
+                  <p className="m-0 text-[13px] text-muted">Loading preview…</p>
                 </div>
               ) : selectedRel && isPaaRel(selectedRel) ? (
                 texturePreview ? (
-                  <div className="mission-resource-editor-editor-stack mission-resource-editor-editor-stack--image">
-                    <div className="mission-resource-editor-stack-pane mission-resource-editor-stack-pane--grow">
+                  <div className="flex min-h-[200px] min-w-0 flex-1 flex-col">
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col [flex:1_1_0]">
                       <ImagePreview
                         width={texturePreview.width}
                         height={texturePreview.height}
@@ -1198,16 +1224,16 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                     </div>
                   </div>
                 ) : (
-                  <div className="mission-resource-placeholder mission-resource-preview-fallback">
-                    <p className="mission-resource-placeholder-text">
+                  <div className="flex min-h-[200px] flex-1 flex-col items-center justify-center text-center">
+                    <p className="m-0 max-w-[36ch] text-[13px] text-muted">
                       {fileErr ? 'Preview is not available for this file.' : '\u00a0'}
                     </p>
                   </div>
                 )
               ) : selectedRel && isP3dRel(selectedRel) ? (
                 meshPreview ? (
-                  <div className="mission-resource-editor-editor-stack mission-resource-editor-editor-stack--mesh">
-                    <div className="mission-resource-editor-stack-pane mission-resource-editor-stack-pane--grow">
+                  <div className="flex min-h-[280px] min-w-0 flex-1 flex-col">
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col [flex:1_1_0]">
                       <P3dPreview
                         positions={meshPreview.positions}
                         indices={meshPreview.indices}
@@ -1219,24 +1245,32 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                     </div>
                   </div>
                 ) : (
-                  <div className="mission-resource-placeholder mission-resource-preview-fallback">
-                    <p className="mission-resource-placeholder-text">
+                  <div className="flex min-h-[200px] flex-1 flex-col items-center justify-center text-center">
+                    <p className="m-0 max-w-[36ch] text-[13px] text-muted">
                       {fileErr ? 'Preview is not available for this file.' : '\u00a0'}
                     </p>
                   </div>
                 )
               ) : !monacoReady ? (
-                <div className="mission-resource-loading mission-resource-loading-inline">
-                  <div className="mission-resource-loading-bar" />
-                  <p className="mission-resource-loading-text">Preparing editor…</p>
+                <div className="px-3 py-6 text-center">
+                  <div
+                    className="mx-auto mb-3.5 h-[3px] w-full max-w-[200px] rounded-full bg-gradient-to-r from-border via-accent to-border bg-[length:200%_100%]"
+                    style={{ animation: "mission-resource-shimmer 1.1s ease-in-out infinite" }}
+                  />
+                  <p className="m-0 text-[13px] text-muted">Preparing editor…</p>
                 </div>
               ) : (
                 <div
-                  className="mission-resource-editor-editor-stack"
+                  className="flex min-h-0 w-full min-w-0 flex-1 flex-col"
                   ref={environment === 'mod' ? editorStackRef : undefined}
                 >
-                  <div className="mission-resource-editor-stack-pane mission-resource-editor-stack-pane--grow">
-                    <div className="mission-resource-monaco" role="textbox" aria-label="File contents" aria-multiline>
+                  <div className="flex min-h-[200px] min-w-0 flex-1 flex-col [flex:1_1_0]">
+                    <div
+                      className="mission-resource-monaco box-border flex h-full w-full max-w-full min-h-[200px] min-w-0 flex-1 flex-col overflow-hidden border-t border-border bg-subtle [resize:none] [&>div]:min-h-0 [&>div]:flex-1"
+                      role="textbox"
+                      aria-label="File contents"
+                      aria-multiline
+                    >
                       <Editor
                         height="100%"
                         theme={missionMonacoTheme}
@@ -1244,8 +1278,9 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                         value={fileContent}
                         onMount={onMonacoMount}
                         onChange={(v) => {
-                          setFileContent(v ?? '')
-                          setDirty(true)
+                          const newContent = v ?? ''
+                          setFileContent(newContent)
+                          setDirty(newContent !== originalContentRef.current)
                         }}
                         options={{
                           readOnly:
@@ -1279,27 +1314,27 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                     <>
                       <button
                         type="button"
-                        className="mission-resource-split mission-resource-split-h"
+                        className="m-0 w-full shrink-0 [flex:0_0_6px] cursor-row-resize border-0 bg-transparent p-0 [touch-action:none] hover:bg-[rgba(9,105,218,0.08)] focus:outline-none focus:shadow-[var(--focus)] dark:hover:bg-[rgba(88,166,255,0.1)]"
                         aria-orientation="horizontal"
                         aria-label="Resize panels"
                         onPointerDown={onProblemsResizePointerDown}
                         style={{ touchAction: 'none' }}
                       />
                       <aside
-                        className="mission-resource-problems mission-resource-problems--sized"
+                        className="flex min-h-0 max-h-none min-w-0 flex-col overflow-hidden [flex:0_1_auto] rounded-b-[var(--radius)] border-0 border-t border-border bg-subtle"
                         aria-label="Project check results"
                         style={{ flex: `0 0 ${problemsHeight}px` }}
                       >
-                      <div className="mission-resource-problems-head">
-                        <span className="mission-resource-problems-title">Project check</span>
+                      <div className="flex items-center justify-between gap-2.5 border-b border-border px-3 py-2">
+                        <span className="shrink-0 text-[10px] font-extrabold tracking-[0.12em] text-muted uppercase">Project check</span>
                         {lintRunning ? (
-                          <span className="mission-resource-problems-status mission-resource-problems-status-busy">
+                          <span className="inline-flex text-muted">
                             <Spinner size="sm" color="var(--text-muted)" aria-label="Checking project" />
                           </span>
                         ) : null}
                       </div>
                       {lintToolError ? (
-                        <div className="mission-resource-problems-banner" role="alert">
+                        <div className="scrollbar-subtle m-0 max-h-[200px] overflow-auto overflow-x-auto bg-[color-mix(in_srgb,var(--danger)_6%,var(--bg-subtle))] px-3.5 py-2.5 text-xs leading-normal text-body" role="alert">
                           {lintToolError.split('\n').map((errLine, li) => {
                             const parsed = parseGccStyleDiagnosticLine(projectRoot, errLine)
                             const rel =
@@ -1320,10 +1355,10 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                               <Fragment key={li}>
                                 {li > 0 ? <br /> : null}
                                 {locEnd != null && rel && focusLine != null ? (
-                                  <p className="mission-resource-problems-banner-line">
+                                  <p className="m-0 break-words [overflow-wrap:anywhere]">
                                     <button
                                       type="button"
-                                      className="mission-resource-problems-banner-link"
+                                      className="cursor-pointer border-0 border-b border-dotted border-[color-mix(in_srgb,var(--accent)_50%,var(--text-muted))] bg-transparent p-0 font-mono text-[0.8rem] [text-align:inherit] [text-decoration:inherit] text-accent hover:enabled:border-b-accent hover:enabled:text-accent"
                                       onClick={() =>
                                         void openFile(rel, { line: focusLine, column: focusCol })
                                       }
@@ -1333,7 +1368,7 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                                     <span>{errLine.slice(locEnd)}</span>
                                   </p>
                                 ) : (
-                                  <p className="mission-resource-problems-banner-line">{errLine}</p>
+                                  <p className="m-0 break-words [overflow-wrap:anywhere]">{errLine}</p>
                                 )}
                               </Fragment>
                             )
@@ -1341,21 +1376,36 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                         </div>
                       ) : null}
                       {!lintRunning && !lintToolError && lintDiagnostics.length === 0 ? (
-                        <p className="mission-resource-problems-empty">No issues reported for this folder.</p>
+                        <p className="m-0 p-2.5 text-center text-xs text-muted">No issues reported for this folder.</p>
                       ) : null}
                       {lintDiagnostics.length > 0 ? (
-                        <ul className="mission-resource-problems-list">
+                        <ul className="scrollbar-subtle m-0 max-h-[min(200px,30vh)] list-none space-y-0 overflow-y-auto overflow-x-hidden p-0 [scrollbar-gutter:stable]">
                           {lintDiagnostics.map((d, i) => {
                             const rel = d.file ? relFromProjectRoot(projectRoot, d.file) : null
                             const loc =
                               d.line != null
                                 ? `${d.line}${d.column != null ? `:${d.column}` : ''}`
                                 : ''
+                            const sev =
+                              d.severity === "warning"
+                                ? "warning"
+                                : d.severity === "help" || d.severity === "info"
+                                  ? "info"
+                                  : "error"
+                            const sevClass =
+                              sev === "warning"
+                                ? "border-amber-600/30 bg-amber-500/20 text-amber-800 dark:text-amber-200"
+                                : sev === "info"
+                                  ? "border-blue-600/30 bg-blue-500/20 text-blue-800 dark:text-blue-200"
+                                  : "border-red-500/30 bg-red-500/20 text-red-800 dark:text-red-200"
                             return (
-                              <li key={`${d.file ?? ''}-${i}`} className="mission-resource-problems-item">
+                              <li
+                                key={`${d.file ?? ""}-${i}`}
+                                className="mb-0 border-b border-border [margin-bottom:0] last:mb-0"
+                              >
                                 <button
                                   type="button"
-                                  className="mission-resource-problems-row"
+                                  className="flex w-full min-w-0 flex-col items-stretch gap-0.5 border-0 bg-transparent p-1.5 text-left [cursor:pointer] [font:inherit] [text-align:left] transition-[background] duration-100 [color:var(--text-body)] hover:enabled:bg-app disabled:cursor-not-allowed disabled:opacity-50"
                                   disabled={!rel}
                                   onClick={() => {
                                     if (!rel) return
@@ -1366,14 +1416,14 @@ export function MissionResourceBrowser({ projectRoot, disabled, environment = 'm
                                   }}
                                 >
                                   <span
-                                    className={`mission-resource-problems-sev mission-resource-problems-sev-${d.severity === 'warning' ? 'warning' : d.severity === 'help' || d.severity === 'info' ? 'info' : 'error'}`}
+                                    className={`w-fit rounded-sm border px-1.5 py-0.5 text-[10px] font-bold uppercase [letter-spacing:0.04em] ${sevClass}`}
                                   >
                                     {d.severity === 'warning' ? 'Warning' : d.severity === 'help' || d.severity === 'info' ? 'Info' : 'Error'}
                                   </span>
-                                  <span className="mission-resource-problems-meta">
+                                  <span className="break-words text-[0.7rem] font-mono [color:var(--text-muted)] [overflow-wrap:anywhere] [word-break:break-all] sm:text-xs">
                                     {rel ? `${rel}${loc ? ` (${loc})` : ''}` : d.file ?? '—'}
                                   </span>
-                                  <span className="mission-resource-problems-msg">{d.message}</span>
+                                  <span className="min-w-0 break-words text-xs leading-snug [overflow-wrap:anywhere]">{d.message}</span>
                                 </button>
                               </li>
                             )

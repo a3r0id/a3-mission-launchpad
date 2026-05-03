@@ -1,0 +1,374 @@
+﻿/* â€”â€” Arma process monitor (Testing) â€”â€” */
+.proc-monitor {
+  position: relative;
+  overflow: hidden;
+}
+
+.proc-monitor-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.proc-monitor-title {
+  margin-bottom: 6px;
+}
+
+.proc-monitor-lead {
+  margin: 0;
+  max-width: 52ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.proc-monitor-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.proc-pause-btn {
+  font-size: 12px;
+  padding: 7px 12px;
+}
+
+.proc-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.proc-live-pill--on {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+  background: color-mix(in srgb, var(--success) 12%, var(--bg-subtle));
+}
+
+.proc-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.55;
+}
+
+.proc-live-pill--on .proc-live-dot {
+  background: var(--success);
+  opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 35%, transparent);
+  animation: proc-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes proc-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.85;
+  }
+}
+
+.proc-sampled {
+  margin: 0 0 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.proc-sampled time {
+  font-variant-numeric: tabular-nums;
+}
+
+.proc-empty {
+  text-align: center;
+  padding: 36px 20px 28px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--bg-subtle) 0%, transparent 100%);
+}
+
+.proc-empty-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 14px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, var(--accent-soft), transparent);
+  border: 1px solid var(--border);
+  opacity: 0.9;
+}
+
+.proc-empty-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.proc-empty-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 36ch;
+  margin-inline: auto;
+  line-height: 1.45;
+}
+
+.proc-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+}
+
+.proc-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 16px 14px;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+  animation: proc-card-in 0.45s ease backwards;
+}
+
+@keyframes proc-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.proc-card-glow {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    125deg,
+    color-mix(in srgb, var(--accent) 18%, transparent) 0%,
+    transparent 42%,
+    color-mix(in srgb, var(--success) 12%, transparent) 100%
+  );
+  opacity: 0.35;
+  z-index: 0;
+}
+
+.proc-card > *:not(.proc-card-glow) {
+  position: relative;
+  z-index: 1;
+}
+
+.proc-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.proc-card-title-block {
+  min-width: 0;
+}
+
+.proc-card-name {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  word-break: break-word;
+}
+
+.proc-card-meta {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.proc-card-em {
+  color: var(--text-heading);
+  font-weight: 600;
+}
+
+.proc-card-dot {
+  margin: 0 4px;
+}
+
+.proc-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.proc-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.proc-chip--cpu {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+
+.proc-chip--mem {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 14%, var(--bg-subtle));
+  border-color: color-mix(in srgb, var(--success) 30%, var(--border));
+}
+
+.proc-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 520px) {
+  .proc-charts {
+    grid-template-columns: 1fr;
+  }
+}
+
+.proc-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.proc-chart-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.proc-spark {
+  display: block;
+  width: 100%;
+  height: 44px;
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+}
+
+.proc-spark--cpu .proc-spark-line {
+  stroke: var(--accent);
+}
+
+.proc-spark--cpu .proc-spark-grad-stop-a {
+  stop-color: var(--accent);
+  stop-opacity: 0.28;
+}
+
+.proc-spark--cpu .proc-spark-grad-stop-b {
+  stop-color: var(--accent);
+  stop-opacity: 0.02;
+}
+
+.proc-spark--mem .proc-spark-line {
+  stroke: var(--success);
+}
+
+.proc-spark--mem .proc-spark-grad-stop-a {
+  stop-color: var(--success);
+  stop-opacity: 0.28;
+}
+
+.proc-spark--mem .proc-spark-grad-stop-b {
+  stop-color: var(--success);
+  stop-opacity: 0.02;
+}
+
+.proc-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.proc-card-foot .proc-kill-btn {
+  margin-left: auto;
+}
+
+.proc-kill-btn {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+
+.proc-kill-btn:hover:not(:disabled) {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
+}
+
+.proc-kill-err {
+  margin-top: 10px;
+  margin-bottom: 0;
+  font-size: 12px;
+}
+
+.proc-foot-stat strong {
+  color: var(--text-heading);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.proc-details {
+  margin-top: 12px;
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.proc-details summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 500;
+  user-select: none;
+}
+
+.proc-details summary:hover {
+  text-decoration: underline;
+}
+
+.proc-cmd {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  max-height: 120px;
+  overflow: auto;
+}
+

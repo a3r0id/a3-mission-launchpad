@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   fetchManagedScenarios,
   fetchDebugServerStatus,
@@ -13,16 +13,17 @@ import {
   type DebugEvent,
 } from '../api/launchpad'
 import { ArmaProcessMonitor } from '../components/ArmaProcessMonitor'
-import { LoggingPage } from './Logging'
 import { getElectronIpc } from '../electronIpc'
+import {
+  DebugServerPanel,
+  DebugLaunchPanel,
+  DebugCommandConsole,
+  DebugLiveEvents,
+  DebugRptTail,
+  type DebugPreset,
+} from '../components/Debugging'
 
 const LS_DEBUGGING_PRESETS = 'launchpad:debugging:presets'
-
-type DebugPreset = {
-  id: string
-  name: string
-  command: DebugCommand
-}
 
 const initialServerState: DebugServerState = {
   host: '127.0.0.1',
@@ -33,13 +34,6 @@ const initialServerState: DebugServerState = {
   messagesSent: 0,
   messagesReceived: 0,
   lastError: null,
-}
-
-function fullMissionName(s: ManagedScenario) {
-  const base = (s.name ?? '').trim()
-  const suf = (s.map_suffix ?? '').trim()
-  if (!base && !suf) return '—'
-  return `${base || '—'}.${suf || '—'}`
 }
 
 function makeId() {
@@ -76,7 +70,6 @@ export function DebuggingPage() {
       return []
     }
   })
-  const [showLogs, setShowLogs] = useState(false)
   const [workshopFolderSet, setWorkshopFolderSet] = useState(false)
 
   useEffect(() => {
@@ -209,193 +202,88 @@ export function DebuggingPage() {
     })
   }
 
-  const filteredEvents = useMemo(() => {
-    const q = eventFilter.trim().toLowerCase()
-    if (!q) return events
-    return events.filter((e) => {
-      const text = `${e.type} ${JSON.stringify(e.payload ?? {})}`.toLowerCase()
-      return text.includes(q)
-    })
-  }, [events, eventFilter])
+  function onSavePreset() {
+    const name = presetName.trim()
+    if (!name) return
+    try {
+      const payload = JSON.parse(commandPayloadText) as Record<string, unknown>
+      setPresets((prev) => [...prev, { id: makeId(), name, command: { type: commandType, payload } }])
+      setPresetName('')
+    } catch {
+      setCommandErr('Cannot save preset: payload must be valid JSON object.')
+    }
+  }
+
+  function onLoadPreset(preset: DebugPreset) {
+    setCommandType(preset.command.type)
+    setCommandPayloadText(JSON.stringify(preset.command.payload ?? {}, null, 2))
+  }
 
   return (
-    <div className="page-stack">
-      {/* <header className="page-header">
-        <h1 className="page-title">Debugging</h1>
-        <p className="page-lead">Launch with companion extension, run debug commands, and inspect live extension events.</p>
-      </header> */}
+    <div className="debugging-page relative z-[1] flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-surface">
+      <div className="flex w-full min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden px-5 py-4 text-left">
+        <header className="shrink-0 min-h-0 space-y-1 pb-2">
+          <h1 className="m-0 text-lg font-semibold text-heading">Debugging</h1>
+          <p className="m-0 text-sm text-muted">
+            Launch with companion extension, run debug commands, and inspect live extension events.
+          </p>
+        </header>
 
-      <section className="card form-card">
-        <h2 className="card-title">Extension socket</h2>
-        <div className="logging-meta-grid">
-          <div><strong>Host:</strong> {server.host}</div>
-          <div><strong>Port:</strong> {server.port}</div>
-          <div><strong>Server:</strong> {server.listening ? 'Running' : 'Stopped'}</div>
-          <div><strong>Client:</strong> {server.connected ? server.clientAddress ?? 'Connected' : 'Disconnected'}</div>
-          <div><strong>Sent:</strong> {server.messagesSent}</div>
-          <div><strong>Received:</strong> {server.messagesReceived}</div>
-        </div>
-        <div className="testing-launch-actions">
-          <button type="button" className="btn btn-primary" disabled={serverBusy} onClick={() => void onStartServer()}>
-            Start server
-          </button>
-          <button type="button" className="btn btn-ghost" disabled={serverBusy} onClick={() => void onStopServer()}>
-            Stop server
-          </button>
-          <button type="button" className="btn btn-ghost" disabled={serverBusy} onClick={() => void refreshServer()}>
-            Refresh status
-          </button>
-        </div>
-        {server.lastError ? <p className="form-banner form-banner-error" role="alert">{server.lastError}</p> : null}
-        {serverErr ? <p className="form-banner form-banner-error" role="alert">{serverErr}</p> : null}
-      </section>
-
-      <section className="card form-card">
-        <h2 className="card-title">Mission launch (debug)</h2>
-        <label className="field">
-          <span className="field-label">Managed mission</span>
-          <select className="field-input" value={selectedMissionId} onChange={(e) => setSelectedMissionId(e.target.value)} disabled={launchBusy}>
-            <option value="">— Select —</option>
-            {scenarios.map((s) => (
-              <option key={s.id} value={s.id}>
-                {fullMissionName(s)} ({s.id.slice(0, 8)}…)
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span className="field-label">Extra arguments</span>
-          <textarea
-            className="field-input testing-textarea"
-            rows={2}
-            value={extraArgs}
-            onChange={(e) => setExtraArgs(e.target.value)}
-            disabled={launchBusy}
-            spellCheck={false}
-          />
-          <span className="field-hint">
-            {workshopFolderSet
-              ? 'Mission mod names use the workshop folder from Settings (each mod is a subfolder whose name starts with @).'
-              : 'Set a workshop folder in Settings so saved mission mod names resolve there.'}
-          </span>
-        </label>
-        <label className="testing-inline-toggle">
-          <input type="checkbox" checked={useCompanion} onChange={(e) => setUseCompanion(e.target.checked)} />
-          <span>Use Companion Extension</span>
-        </label>
-        <div className="testing-launch-actions">
-          <button type="button" className="btn btn-primary" disabled={launchBusy} onClick={() => void onLaunchMission()}>
-            Launch Mission
-          </button>
-        </div>
-        {launchMsg ? <p className="form-banner form-banner-success" role="status">{launchMsg}</p> : null}
-        {launchErr ? <p className="form-banner form-banner-error" role="alert">{launchErr}</p> : null}
-      </section>
-
-      <section className="card form-card">
-        <h2 className="card-title">Command console</h2>
-        <div className="testing-launch-grid">
-          <label className="field" style={{ width: '100%' }}>
-            <span className="field-label">Command type</span>
-            <select className="field-input" value={commandType} onChange={(e) => setCommandType(e.target.value)}>
-              <option value="ping">ping</option>
-              <option value="sqf.run">sqf.run</option>
-              <option value="sqf.eval">sqf.eval</option>
-              <option value="mission.event">mission.event</option>
-              <option value="extension.call">extension.call</option>
-              <option value="custom">custom</option>
-            </select>
-          </label>
-          <label className="field" style={{ width: '100%' }}>
-            <span className="field-label">Payload (JSON object)</span>
-            <textarea
-              className="field-input testing-textarea"
-              rows={6}
-              value={commandPayloadText}
-              onChange={(e) => setCommandPayloadText(e.target.value)}
-              spellCheck={false}
+        <div className="scrollbar-subtle flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-auto">
+          <div className="w-full min-w-0 space-y-6">
+            <DebugServerPanel
+              server={server}
+              serverBusy={serverBusy}
+              serverErr={serverErr}
+              onStartServer={onStartServer}
+              onStopServer={onStopServer}
+              onRefreshServer={refreshServer}
             />
-          </label>
-        </div>
-        <div className="testing-launch-actions">
-          <button type="button" className="btn btn-primary" disabled={commandBusy} onClick={() => void onSendCustomCommand()}>
-            Send command
-          </button>
-          <button type="button" className="btn btn-ghost" disabled={commandBusy} onClick={() => void onSendCommand({ type: 'ping', payload: { from: 'debugging-page' } })}>
-            Send ping
-          </button>
-          <button type="button" className="btn btn-ghost" disabled={commandBusy} onClick={() => setEvents([])}>
-            Clear events
-          </button>
-        </div>
-        <div className="testing-launch-grid">
-          <label className="field">
-            <span className="field-label">Save preset</span>
-            <input className="field-input" value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="Preset name" />
-          </label>
-        </div>
-        <div className="testing-launch-actions">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => {
-              const name = presetName.trim()
-              if (!name) return
-              try {
-                const payload = JSON.parse(commandPayloadText) as Record<string, unknown>
-                setPresets((prev) => [...prev, { id: makeId(), name, command: { type: commandType, payload } }])
-                setPresetName('')
-              } catch {
-                setCommandErr('Cannot save preset: payload must be valid JSON object.')
-              }
-            }}
-          >
-            Save preset
-          </button>
-          {presets.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              className="btn btn-ghost btn-xs"
-              onClick={() => {
-                setCommandType(p.command.type)
-                setCommandPayloadText(JSON.stringify(p.command.payload ?? {}, null, 2))
-              }}
-              title="Load preset"
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-        {commandErr ? <p className="form-banner form-banner-error" role="alert">{commandErr}</p> : null}
-      </section>
 
-      <section className="card form-card">
-        <h2 className="card-title">Live events</h2>
-        <label className="field">
-          <span className="field-label">Filter</span>
-          <input className="field-input" value={eventFilter} onChange={(e) => setEventFilter(e.target.value)} placeholder="Type/payload filter" />
-        </label>
-        <pre className="pbo-build-log" aria-live="polite">
-          {filteredEvents.length
-            ? filteredEvents
-                .slice(-200)
-                .map((e) => `[${new Date(e.ts * 1000).toLocaleTimeString()}] [${e.direction}] ${e.type} ${JSON.stringify(e.payload ?? e.raw ?? {})}`)
-                .join('\n')
-            : 'No events yet.'}
-        </pre>
-      </section>
+            <DebugLaunchPanel
+              scenarios={scenarios}
+              selectedMissionId={selectedMissionId}
+              extraArgs={extraArgs}
+              useCompanion={useCompanion}
+              launchBusy={launchBusy}
+              launchMsg={launchMsg}
+              launchErr={launchErr}
+              workshopFolderSet={workshopFolderSet}
+              onSelectMission={setSelectedMissionId}
+              onExtraArgsChange={setExtraArgs}
+              onUseCompanionChange={setUseCompanion}
+              onLaunchMission={onLaunchMission}
+            />
 
-      <ArmaProcessMonitor />
+            <DebugCommandConsole
+              commandType={commandType}
+              commandPayloadText={commandPayloadText}
+              commandBusy={commandBusy}
+              commandErr={commandErr}
+              presetName={presetName}
+              presets={presets}
+              onCommandTypeChange={setCommandType}
+              onCommandPayloadChange={setCommandPayloadText}
+              onPresetNameChange={setPresetName}
+              onSendCustomCommand={onSendCustomCommand}
+              onSendPing={() => onSendCommand({ type: 'ping', payload: { from: 'debugging-page' } })}
+              onClearEvents={() => setEvents([])}
+              onSavePreset={onSavePreset}
+              onLoadPreset={onLoadPreset}
+            />
 
-      <section className="card form-card">
-        <h2 className="card-title">RPT Tail</h2>
-        <button type="button" className="btn btn-ghost" onClick={() => setShowLogs((v) => !v)}>
-          {showLogs ? 'Hide log tail' : 'Show log tail'}
-        </button>
-      </section>
+            <DebugLiveEvents
+              events={events}
+              eventFilter={eventFilter}
+              onEventFilterChange={setEventFilter}
+            />
 
-      {showLogs ? <LoggingPage /> : null}
+            <ArmaProcessMonitor />
+
+            <DebugRptTail />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

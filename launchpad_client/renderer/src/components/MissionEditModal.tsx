@@ -16,7 +16,7 @@ function modelBaselineJson(m: DescriptionExtModel): string {
   })
 }
 import { ScriptEditorModal } from './Editor/IntegratedScriptEditor'
-import Util from '../Util'
+import Util from '../utils'
 
 export type MissionEditModalProps = {
   mission: ManagedScenario

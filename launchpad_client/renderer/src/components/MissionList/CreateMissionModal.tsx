@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { MissionBuildPage } from '../../pages/MissionBuildPage'
 
 type CreateMissionModalProps = {
@@ -7,42 +8,58 @@ type CreateMissionModalProps = {
 }
 
 export function CreateMissionModal({ onClose, onOpenSettings, onCreated }: CreateMissionModalProps) {
+  const [mounted, setMounted] = useState(false)
+  const footerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   return (
-    <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="new-mission-title">
-      <button
-        type="button"
-        className="modal-backdrop"
-        aria-label="Close dialog"
-        onClick={onClose}
-      />
-      <div className="modal-dialog modal-dialog-wide mission-edit-dialog">
-        <header className="mission-edit-header">
-          <div className="mission-edit-header-main">
-            <p className="mission-edit-eyebrow">Create mission</p>
-            <h2 id="new-mission-title" className="mission-edit-title">
-              New Mission
-            </h2>
-          </div>
-          <button
-            type="button"
-            className="mission-edit-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <span aria-hidden>×</span>
-          </button>
-        </header>
-        <div className="mission-edit-surface">
-          <MissionBuildPage
-            embedded
-            onGoSettings={onOpenSettings}
-            onBuilt={(res) => {
-              onClose()
-              onCreated(res)
-            }}
-          />
-        </div>
+    <section
+      className={`create-mission-panel absolute inset-0 z-10 flex flex-col overflow-hidden bg-surface ${mounted ? 'create-mission-panel--open' : ''}`}
+      aria-label="New mission"
+      aria-labelledby="new-mission-title"
+    >
+      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-subtle px-4 py-3 sm:px-5">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted transition-colors hover:bg-app hover:text-heading"
+          aria-label="Back to missions"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M10 12L6 8l4-4" />
+          </svg>
+          <span className="hidden sm:inline">Missions</span>
+        </button>
+        <div className="h-4 w-px bg-border" />
+        <h2 id="new-mission-title" className="m-0 text-sm font-semibold text-heading">
+          New Mission
+        </h2>
+      </header>
+
+      <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-surface px-4 py-4 sm:px-5 sm:py-5">
+        <MissionBuildPage
+          embedded
+          onGoSettings={onOpenSettings}
+          onBuilt={(res) => {
+            onClose()
+            onCreated(res)
+          }}
+          footerPortal={footerRef}
+        />
       </div>
-    </div>
+
+      <footer ref={footerRef} className="shrink-0 border-t border-border bg-surface px-4 py-3 empty:hidden sm:px-5" />
+    </section>
   )
 }

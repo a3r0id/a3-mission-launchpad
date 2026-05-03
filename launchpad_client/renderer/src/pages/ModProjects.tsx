@@ -6,16 +6,16 @@ import {
   updateManagedModProject,
   type ManagedModProject,
 } from '../api/launchpad'
-import Util from '../Util'
+import Util from '../utils'
 import { ScriptEditorModal } from '../components/Editor/IntegratedScriptEditor'
 import {
   MissionSearchBar,
   MissionListStats,
   ModProjectListTable,
+  CreateModProjectModal,
   useModProjectListPreferences,
   type ModProjectTableColumnId,
 } from '../components/MissionList'
-import '../components/MissionList/MissionList.less'
 
 type SortDir = 'asc' | 'desc'
 
@@ -27,10 +27,6 @@ export function ModProjectsPage() {
   const [actionErr, setActionErr] = useState<string | null>(null)
 
   const [createOpen, setCreateOpen] = useState(false)
-  const [createName, setCreateName] = useState('')
-  const [createDescription, setCreateDescription] = useState('')
-  const [createBusy, setCreateBusy] = useState(false)
-  const [createErr, setCreateErr] = useState<string | null>(null)
 
   const [editProject, setEditProject] = useState<ManagedModProject | null>(null)
   const [editName, setEditName] = useState('')
@@ -143,33 +139,26 @@ export function ModProjectsPage() {
     })()
   }
 
-  function openCreate() {
-    setCreateName('')
-    setCreateDescription('')
-    setCreateErr(null)
-    setCreateOpen(true)
-  }
-
-  async function submitCreate() {
-    setCreateBusy(true)
-    setCreateErr(null)
+  async function handleCreate(data: { name: string; description: string }) {
     try {
       const res = await createManagedModProject({
-        name: createName.trim(),
-        description: createDescription.trim(),
+        name: data.name,
+        description: data.description,
       })
       if ('error' in res && res.error) {
-        setCreateErr(res.error)
+        setActionErr(res.error)
+        setCreateOpen(false)
         return
       }
       if (!('ok' in res) || !res.ok) {
-        setCreateErr('Create failed.')
+        setActionErr('Create failed.')
+        setCreateOpen(false)
         return
       }
 
       const root = res.project.project_path?.trim() ?? ''
       if (root) {
-        const init = await Util.initModProjectHemtt(root, { name: createName.trim() })
+        const init = await Util.initModProjectHemtt(root, { name: data.name })
         if (!init.ok) {
           const needsDesktop =
             typeof init.error === 'string' &&
@@ -187,7 +176,8 @@ export function ModProjectsPage() {
           } catch {
             /* rollback best effort */
           }
-          setCreateErr(init.error ?? 'Could not add starter build files. The new entry was removed.')
+          setActionErr(init.error ?? 'Could not add starter build files. The new entry was removed.')
+          setCreateOpen(false)
           return
         }
       }
@@ -196,9 +186,8 @@ export function ModProjectsPage() {
       setSaveInfo('Mod project created with starter build files in the folder.')
       void load()
     } catch (e) {
-      setCreateErr(e instanceof Error ? e.message : 'Create failed')
-    } finally {
-      setCreateBusy(false)
+      setActionErr(e instanceof Error ? e.message : 'Create failed')
+      setCreateOpen(false)
     }
   }
 
@@ -257,7 +246,7 @@ export function ModProjectsPage() {
   }
 
   return (
-    <div className="mission-page">
+    <div className="mission-page relative z-[1] flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface">
       <ScriptEditorModal
         open={scriptEditor !== null}
         projectRoot={scriptEditor?.root ?? ''}
@@ -265,81 +254,6 @@ export function ModProjectsPage() {
         environment="mod"
         onClose={() => setScriptEditor(null)}
       />
-      {createOpen ? (
-        <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="new-mod-project-title">
-          <button
-            type="button"
-            className="modal-backdrop"
-            aria-label="Close dialog"
-            onClick={() => !createBusy && setCreateOpen(false)}
-          />
-          <div className="modal-dialog modal-dialog-wide mission-edit-dialog">
-            <header className="mission-edit-header">
-              <div className="mission-edit-header-main">
-                <p className="mission-edit-eyebrow">Mod projects</p>
-                <h2 id="new-mod-project-title" className="mission-edit-title">
-                  New mod project
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="mission-edit-close"
-                onClick={() => !createBusy && setCreateOpen(false)}
-                aria-label="Close"
-                disabled={createBusy}
-              >
-                <span aria-hidden>×</span>
-              </button>
-            </header>
-            <div className="mission-edit-surface">
-              <div className="mission-edit-section">
-                <p className="mission-edit-lead">
-                  This becomes a folder under Mod projects in Launchpad&apos;s data area. Use a short name with no
-                  slashes (same rules as a single folder name). In the desktop app, starter build files are added there
-                  automatically so you can use the Script Editor and build when you are ready.
-                </p>
-                <label className="field">
-                  <span className="field-label">Project name</span>
-                  <input
-                    type="text"
-                    className="field-input"
-                    value={createName}
-                    onChange={(e) => setCreateName(e.target.value)}
-                    disabled={createBusy}
-                    autoComplete="off"
-                  />
-                </label>
-                <label className="field">
-                  <span className="field-label">Description (optional)</span>
-                  <input
-                    type="text"
-                    className="field-input"
-                    value={createDescription}
-                    onChange={(e) => setCreateDescription(e.target.value)}
-                    disabled={createBusy}
-                    autoComplete="off"
-                  />
-                </label>
-                {createErr ? (
-                  <p className="form-banner form-banner-error" role="alert">
-                    {createErr}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-            <footer className="mission-edit-footer">
-              <div className="mission-edit-footer-actions">
-                <button type="button" className="btn btn-primary" disabled={createBusy} onClick={() => void submitCreate()}>
-                  {createBusy ? 'Creating…' : 'Create'}
-                </button>
-                <button type="button" className="btn btn-ghost" disabled={createBusy} onClick={() => setCreateOpen(false)}>
-                  Cancel
-                </button>
-              </div>
-            </footer>
-          </div>
-        </div>
-      ) : null}
 
       {editProject ? (
         <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="edit-mod-project-title">
@@ -467,9 +381,9 @@ export function ModProjectsPage() {
         </div>
       ) : null}
 
-      <header className="mission-page-header">
-        <div className="mission-page-title-row">
-          <h1 className="mission-page-title">Mod projects</h1>
+      <header className="flex shrink-0 items-center justify-between gap-4 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <h1 className="m-0 text-lg font-semibold text-heading">Mod projects</h1>
           <MissionSearchBar
             value={searchQuery}
             onChange={setSearchQuery}
@@ -484,10 +398,12 @@ export function ModProjectsPage() {
             itemPlural="mod projects"
           />
         </div>
-        <div className="mission-page-actions">
-          <button type="button" className="btn btn-primary" onClick={() => openCreate()}>
-            + New mod project
-          </button>
+        <div className="flex shrink-0 gap-2">
+          {!createOpen && (
+            <button type="button" className="btn btn-primary" onClick={() => setCreateOpen(true)}>
+              + New mod project
+            </button>
+          )}
           <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
             Refresh
           </button>
@@ -495,29 +411,42 @@ export function ModProjectsPage() {
       </header>
 
       {loadError ? (
-        <p className="form-banner form-banner-error mission-page-banner" role="alert">
+        <p
+          className="m-0 w-full rounded-none border-x-0 border-b border-t-0 border-danger/25 bg-danger-soft px-2.5 py-2 text-xs text-heading"
+          role="alert"
+        >
           {loadError}
         </p>
       ) : null}
       {actionErr ? (
-        <p className="form-banner form-banner-error mission-page-banner" role="alert">
+        <p
+          className="m-0 w-full rounded-none border-x-0 border-b border-t-0 border-danger/25 bg-danger-soft px-2.5 py-2 text-xs text-heading"
+          role="alert"
+        >
           {actionErr}
         </p>
       ) : null}
       {saveInfo && !createOpen && !editProject && !deleteTarget ? (
-        <p className="form-banner form-banner-success mission-page-banner" role="status">
+        <p
+          className="m-0 w-full rounded-none border-x-0 border border-b border-t-0 border-success/28 bg-success/12 px-2.5 py-2 text-xs text-heading"
+          role="status"
+        >
           {saveInfo}
         </p>
       ) : null}
 
-      {loading ? <p className="mission-page-empty">Loading…</p> : null}
+      {loading ? (
+        <p className="m-0 px-5 py-10 text-center text-sm text-muted">Loading…</p>
+      ) : null}
 
       {!loading && projects.length === 0 && !loadError ? (
-        <p className="mission-page-empty">No mod projects yet.</p>
+        <p className="m-0 px-5 py-10 text-center text-sm text-muted">No mod projects yet.</p>
       ) : null}
 
       {!loading && projects.length > 0 && sortedProjects.length === 0 ? (
-        <p className="mission-page-empty">No mod projects match &quot;{searchQuery}&quot;</p>
+        <p className="m-0 px-5 py-10 text-center text-sm text-muted">
+          No mod projects match &quot;{searchQuery}&quot;
+        </p>
       ) : null}
 
       {!loading && sortedProjects.length > 0 ? (
@@ -538,6 +467,13 @@ export function ModProjectsPage() {
           onRemove={openDelete}
         />
       ) : null}
+
+      {createOpen && (
+        <CreateModProjectModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={(data) => void handleCreate(data)}
+        />
+      )}
     </div>
   )
 }

@@ -100,7 +100,10 @@ export function FileIcon({ filename, className }: FileIconProps) {
   const color = COLOR_MAP[fileType]
 
   return (
-    <span className={`file-tree-icon file-tree-icon-file ${className ?? ''}`} style={{ color }}>
+    <span
+      className={`inline-flex h-4 w-4 shrink-0 items-center justify-center text-xs ${className ?? ""}`}
+      style={{ color }}
+    >
       <FontAwesomeIcon icon={icon} />
     </span>
   )
@@ -113,7 +116,9 @@ export type FolderIconProps = {
 
 export function FolderIcon({ isOpen, className }: FolderIconProps) {
   return (
-    <span className={`file-tree-icon file-tree-icon-folder ${className ?? ''}`}>
+    <span
+      className={`inline-flex h-4 w-4 shrink-0 items-center justify-center text-xs text-[var(--file-icon-folder)] ${className ?? ""}`}
+    >
       <FontAwesomeIcon icon={isOpen ? faFolderOpen : faFolder} />
     </span>
   )

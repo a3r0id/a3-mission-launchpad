@@ -1,0 +1,72 @@
+﻿.modal-dialog .card-title {
+  margin: 0;
+}
+
+.pbo-build-log {
+  margin: 0;
+  min-height: 140px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* PBO build modal â€” same shell as mission edit (wide, padded surface, footer) */
+.pbo-build-dialog {
+  min-height: min(520px, 86vh);
+}
+
+.pbo-build-dialog .mission-edit-surface {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.pbo-build-dialog .pbo-build-section {
+  flex: 1;
+  min-height: 0;
+  gap: 18px;
+}
+
+.pbo-build-dialog .pbo-build-lead {
+  max-width: none;
+}
+
+.pbo-build-dialog .pbo-build-log {
+  flex: 1;
+  min-height: min(220px, 32vh);
+  max-height: min(48vh, 480px);
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.modal-checkbox-field {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+.modal-checkbox-field input {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+

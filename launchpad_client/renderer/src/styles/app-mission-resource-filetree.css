@@ -1,0 +1,190 @@
+﻿.mission-resource-loading {
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.mission-resource-loading-inline {
+  padding: 24px 12px;
+}
+
+.mission-resource-loading-bar {
+  width: 100%;
+  max-width: 200px;
+  height: 3px;
+  margin: 0 auto 14px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--border) 0%,
+    var(--accent) 50%,
+    var(--border) 100%
+  );
+  background-size: 200% 100%;
+  animation: mission-edit-shimmer 1.1s ease-in-out infinite;
+}
+
+@keyframes mission-edit-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.mission-resource-loading-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* File tree */
+.mission-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mission-tree-nested {
+  padding-left: 2px;
+}
+
+.mission-tree-item {
+  list-style: none;
+}
+
+.mission-tree-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin: 1px 0;
+}
+
+.mission-tree-line .mission-tree-row-main {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.mission-tree-row-tool {
+  flex-shrink: 0;
+  padding: 2px 6px !important;
+  min-height: 28px;
+  line-height: 1;
+  opacity: 0.72;
+}
+
+.mission-tree-line:hover .mission-tree-row-tool {
+  opacity: 1;
+}
+
+.mission-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  margin: 1px 0;
+  text-align: left;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 5px 6px;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.mission-tree-row-dir {
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.mission-tree-row:hover {
+  background: var(--bg-surface);
+}
+
+.mission-tree-row-file.is-selected {
+  background: var(--accent-soft);
+  outline: 1px solid rgba(9, 105, 218, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mission-tree-row-file.is-selected {
+    outline-color: rgba(88, 166, 255, 0.35);
+  }
+}
+
+.mission-tree-toggle {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.mission-tree-toggle-spacer {
+  visibility: hidden;
+}
+
+.mission-tree-item.is-expanded > .mission-tree-line > .mission-tree-row-dir > .mission-tree-toggle::before {
+  transform: rotate(90deg);
+}
+
+.mission-tree-row-dir .mission-tree-toggle::before {
+  content: '';
+  display: block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 5px 0 5px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transform: rotate(0deg);
+  transition: transform 0.15s ease;
+}
+
+.mission-tree-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  margin-right: 4px;
+}
+
+.mission-tree-icon-folder {
+  background: rgba(212, 160, 18, 0.28);
+  border: 1px solid rgba(181, 133, 11, 0.45);
+}
+
+.mission-tree-icon-file {
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mission-tree-icon-folder {
+    background: rgba(201, 162, 39, 0.22);
+    border-color: rgba(201, 162, 39, 0.4);
+  }
+}
+
+.mission-tree-name {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.mission-tree-meta {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+

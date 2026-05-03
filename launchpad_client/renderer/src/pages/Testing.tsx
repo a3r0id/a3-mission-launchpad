@@ -9,6 +9,7 @@ import {
   type TestingAutotestDetectedResult,
 } from '../api/launchpad'
 import { ArmaProcessMonitor } from '../components/ArmaProcessMonitor'
+import { TestingLaunchSetup, TestingAutotest } from '../components/Testing'
 
 const LS_MISSION = 'launchpad:testing:selectedMissionId'
 const LS_EXTRA = 'launchpad:testing:extraArgs'
@@ -20,13 +21,6 @@ function readSessionBool(key: string, defaultOn: boolean): boolean {
   const raw = sessionStorage.getItem(key)
   if (raw === null) return defaultOn
   return raw === '1'
-}
-
-function fullMissionName(s: ManagedScenario) {
-  const base = (s.name ?? '').trim()
-  const suf = (s.map_suffix ?? '').trim()
-  if (!base && !suf) return '—'
-  return `${base || '—'}.${suf || '—'}`
 }
 
 export function TestingPage() {
@@ -231,246 +225,99 @@ export function TestingPage() {
     }
   }
 
-  const selectedMission = scenarios.find((s) => s.id === selectedMissionId)
-
   return (
-    <div className="page-stack testing-page">
-      {/* <header className="page-header">
-        <h1 className="page-title">Testing</h1>
-        <p className="page-lead">
-          Benchmark and audit your mission.
-        </p>
-      </header> */}
+    <div className="testing-page relative z-[1] flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-surface">
+      <div className="flex w-full min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden px-5 py-4 text-left">
+        <header className="shrink-0 min-h-0 space-y-1 pb-2">
+          <h1 className="m-0 text-lg font-semibold text-heading">Testing</h1>
+          <p className="m-0 text-sm text-muted">
+            Benchmark and audit your mission.
+          </p>
+        </header>
 
-      {loading ? (
-        <p className="card-body">Loading…</p>
-      ) : loadErr ? (
-        <p className="form-banner form-banner-error" role="alert">
-          {loadErr}
-        </p>
-      ) : null}
+        <div className="scrollbar-subtle flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-auto">
+          <div className="w-full min-w-0 space-y-6">
+            {loading && (
+              <p className="py-6 text-center text-sm text-muted">Loading…</p>
+            )}
 
-      {!loading && !loadErr ? (
-        <>
-          <section className="card testing-card">
-            {/* <h2 className="card-title">Launch setup</h2> */}
-            {/* <p className="card-body" style={{ marginTop: 0 }}>
-              Pick mission startup options for this session.
-            </p> */}
-            <div className="testing-launch-grid">
-              <div className="testing-launch-main">
-                <label className="field">
-                  <span className="field-label">Managed mission</span>
-                  <select
-                    className="field-input"
-                    value={selectedMissionId}
-                    onChange={(e) => setSelectedMissionId(e.target.value)}
-                    disabled={busy}
-                  >
-                    <option value="">— Select —</option>
-                    {scenarios.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {fullMissionName(s)} ({s.id.slice(0, 8)}…)
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {selectedMission ? (
-                  <p className="field-hint testing-mission-hint">
-                    Arma mission folder:{' '}
-                    <code className="shell-inline-code">
-                      {(selectedMission.name ?? '').trim()}.{(selectedMission.map_suffix ?? '').trim()}
-                    </code>
-                  </p>
-                ) : null}
-                <label className="field">
-                  <span className="field-label">Extra arguments</span>
-                  <textarea
-                    className="field-input testing-textarea"
-                    rows={3}
-                    value={extraArgs}
-                    onChange={(e) => setExtraArgs(e.target.value)}
-                    disabled={busy}
-                    placeholder={'-skipIntro -showScriptErrors -filePatching'}
-                    spellCheck={false}
-                  />
-                  <span className="field-hint">
-                    Optional. Split like a shell command (quotes allowed). Passed after{' '}
-                    <code className="shell-inline-code">-mod=</code>.
-                    {workshopFolderSet
-                      ? ' Mission mod names use the workshop folder from Settings (each mod is a subfolder whose name starts with @).'
-                      : ' Set a workshop folder in Settings so saved mission mod names resolve there.'}
-                  </span>
-                </label>
-                <div className="testing-toggle-list">
-                  <label className="testing-inline-toggle">
-                    <input
-                      type="checkbox"
-                      checked={debugMode}
-                      onChange={(e) => setDebugMode(e.target.checked)}
-                      disabled={busy}
-                    />
-                    <span>
-                      Enable debug mode <code className="shell-inline-code">-debug</code>
-                    </span>
-                  </label>
-                  <label className="testing-inline-toggle">
-                    <input
-                      type="checkbox"
-                      checked={useExtension}
-                      onChange={(e) => setUseExtension(e.target.checked)}
-                      disabled={busy}
-                    />
-                    <span>
-                      Use Companion Extension{' '}
-                      <span
-                        className="shell-inline-code badge badge-info"
-                        title="When enabled, your client will launch with our companion mod. In most Launchpad testing cases this should be enabled."
-                      >
-                        ?
-                      </span>
-                    </span>
-                  </label>
-                  <label className="testing-inline-toggle">
-                    <input
-                      type="checkbox"
-                      checked={enableBattleEye}
-                      onChange={(e) => setEnableBattleEye(e.target.checked)}
-                      disabled={busy}
-                    />
-                    <span>
-                      Enable BattleEye{' '}
-                      <span
-                        className="shell-inline-code badge badge-info"
-                        title="When enabled, your client will launch with BattleEye enabled. In most Launchpad testing cases this should be disabled."
-                      >
-                        ?
-                      </span>
-                    </span>
-                  </label>
-                </div>
-              </div>
-
-              <fieldset className="testing-autotest-fieldset">
-                <legend className="field-label">Autotest</legend>
-                <p className="field-hint testing-autotest-hint">
-                  <strong>Launch an Autotest</strong>. See{' '}
-                  <a
-                    href="https://community.bistudio.com/wiki/Arma_3:_Startup_Parameters#autotest"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    the wiki
-                  </a>
-                  .
-                </p>
-                <label className="field">
-                  <span className="field-label">Run label</span>
-                  <input
-                    className="field-input"
-                    value={autotestLabel}
-                    onChange={(e) => setAutotestLabel(e.target.value)}
-                    disabled={busy}
-                    placeholder="e.g. smoke / benchmark A"
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
-                  <span className="field-hint">
-                    Optional. Used for naming the autotest file.
-                  </span>
-                </label>
-                <div className="testing-autotest-row">
-                  <label className="field">
-                    <span className="field-label">Iterations</span>
-                    <input
-                      className="field-input"
-                      type="number"
-                      min={1}
-                      max={10000}
-                      inputMode="numeric"
-                      value={autotestIterations}
-                      onChange={(e) => setAutotestIterations(e.target.value)}
-                      disabled={busy}
-                      placeholder="3"
-                    />
-                  </label>
-                  <label className="field">
-                    <span className="field-label">Max sec</span>
-                    <input
-                      className="field-input"
-                      type="number"
-                      min={1}
-                      max={864000}
-                      inputMode="numeric"
-                      value={autotestMaxDurationSec}
-                      onChange={(e) => setAutotestMaxDurationSec(e.target.value)}
-                      disabled={busy}
-                      placeholder="600"
-                    />
-                  </label>
-                </div>
-                <label className="field">
-                  <span className="field-label">Tags (optional)</span>
-                  <input
-                    className="field-input"
-                    value={autotestTags}
-                    onChange={(e) => setAutotestTags(e.target.value)}
-                    disabled={busy}
-                    placeholder="Comma or semicolon separated"
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
-                </label>
-              </fieldset>
-            </div>
-
-            <div className="testing-launch-actions">
-              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void runLaunch(false)}>
-                Launch Mission
-              </button>
-              <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void runLaunch(true)}>
-                Launch Mission (Autotest)
-              </button>
-            </div>
-            {autotestPending ? (
-              <p className="form-banner form-banner-warning" role="status">
-                Waiting for autotest result…
+            {loadErr && (
+              <p className="rounded border border-danger/25 bg-danger/10 px-2.5 py-2 text-xs text-danger" role="alert">
+                {loadErr}
               </p>
-            ) : null}
-            {autotestErr ? (
-              <p className="form-banner form-banner-error" role="alert">
-                {autotestErr}
-              </p>
-            ) : null}
-            {autotestResult ? (
-              <div
-                className={`form-banner ${
-                  autotestResult.result.trim().toUpperCase() === 'FAILED'
-                    ? 'form-banner-error'
-                    : 'form-banner-success'
-                }`}
-                role="status"
-              >
-                <strong>Autotest {autotestResult.result || 'completed'}.</strong>{' '}
-                {autotestResult.end_mode ? `End mode: ${autotestResult.end_mode}. ` : ''}
-                {autotestResult.mission ? `Mission: ${autotestResult.mission}.` : ''}
-              </div>
-            ) : null}
-            {msg ? (
-              <p className="form-banner form-banner-success" role="status">
-                {msg}
-              </p>
-            ) : null}
-            {err ? (
-              <p className="form-banner form-banner-error" role="alert">
-                {err}
-              </p>
-            ) : null}
-          </section>
+            )}
 
-          <ArmaProcessMonitor />
-        </>
-      ) : null}
+            {!loading && !loadErr && (
+              <>
+                <TestingLaunchSetup
+                  scenarios={scenarios}
+                  selectedMissionId={selectedMissionId}
+                  extraArgs={extraArgs}
+                  debugMode={debugMode}
+                  useExtension={useExtension}
+                  enableBattleEye={enableBattleEye}
+                  busy={busy}
+                  workshopFolderSet={workshopFolderSet}
+                  onSelectMission={setSelectedMissionId}
+                  onExtraArgsChange={setExtraArgs}
+                  onDebugModeChange={setDebugMode}
+                  onUseExtensionChange={setUseExtension}
+                  onEnableBattleEyeChange={setEnableBattleEye}
+                />
+
+                <TestingAutotest
+                  autotestLabel={autotestLabel}
+                  autotestIterations={autotestIterations}
+                  autotestMaxDurationSec={autotestMaxDurationSec}
+                  autotestTags={autotestTags}
+                  busy={busy}
+                  autotestPending={autotestPending}
+                  autotestResult={autotestResult}
+                  autotestErr={autotestErr}
+                  onAutotestLabelChange={setAutotestLabel}
+                  onAutotestIterationsChange={setAutotestIterations}
+                  onAutotestMaxDurationSecChange={setAutotestMaxDurationSec}
+                  onAutotestTagsChange={setAutotestTags}
+                  onParseSpec={parseAutotestSpecForLaunch}
+                />
+
+                <section className="border-t border-border pt-6">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busy}
+                      onClick={() => void runLaunch(false)}
+                    >
+                      Launch Mission
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={busy}
+                      onClick={() => void runLaunch(true)}
+                    >
+                      Launch Mission (Autotest)
+                    </button>
+                  </div>
+                  {msg && (
+                    <p className="mt-3 rounded border border-success/25 bg-success/10 px-2.5 py-2 text-xs text-success" role="status">
+                      {msg}
+                    </p>
+                  )}
+                  {err && (
+                    <p className="mt-3 rounded border border-danger/25 bg-danger/10 px-2.5 py-2 text-xs text-danger" role="alert">
+                      {err}
+                    </p>
+                  )}
+                </section>
+
+                <ArmaProcessMonitor />
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

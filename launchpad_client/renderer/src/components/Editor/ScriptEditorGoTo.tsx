@@ -204,7 +204,7 @@ export function ScriptEditorGoTo({
 
   useEffect(() => {
     if (mode !== 'symbol' || !listRef.current) return
-    const active = listRef.current.querySelector('.is-selected') as HTMLElement | null
+    const active = listRef.current.querySelector('[aria-selected="true"]') as HTMLElement | null
     if (active) {
       active.scrollIntoView({ block: 'nearest' })
     }
@@ -215,17 +215,32 @@ export function ScriptEditorGoTo({
   const shell = getShell()
   const lineCount = shell?.editor.getModel()?.getLineCount() ?? 0
 
+  const kindBadge = (kind: SymbolEntry['kind'], selected: boolean) => {
+    const base =
+      'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase transition-colors [font-variation-settings:normal]'
+    if (selected) {
+      return `${base} bg-white/20 text-white`
+    }
+    if (kind === 'function') {
+      return `${base} [background:color-mix(in_srgb,var(--accent)_20%,transparent)] text-accent`
+    }
+    if (kind === 'variable') {
+      return `${base} [background:color-mix(in_srgb,var(--warning)_20%,transparent)] text-warning`
+    }
+    return `${base} [background:color-mix(in_srgb,var(--success)_20%,transparent)] text-success`
+  }
+
   return (
-    <div className="script-editor-goto">
-      <div className="script-editor-goto-inner">
-        <label id={labelId} className="script-editor-goto-label" htmlFor={inputId}>
+    <div className="mb-2.5 flex shrink-0 flex-col gap-2 rounded-[var(--radius)] border border-border bg-surface p-2.5 sm:p-3">
+      <div className="flex flex-wrap items-center gap-2.5 sm:gap-2.5 sm:py-0">
+        <label id={labelId} className="shrink-0 text-[11px] font-semibold text-muted" htmlFor={inputId}>
           {mode === 'line' ? `Go to line (1-${lineCount})` : 'Go to symbol'}
         </label>
         <input
           ref={inputRef}
           id={inputId}
           type={mode === 'line' ? 'number' : 'text'}
-          className="field-input script-editor-goto-input"
+          className="field-input min-w-0 max-w-[220px] flex-1 [flex-basis:140px] px-2.5 py-2"
           value={query}
           disabled={disabled}
           onChange={(e) => setQuery(e.target.value)}
@@ -246,7 +261,7 @@ export function ScriptEditorGoTo({
         </button>
         <button
           type="button"
-          className="btn btn-ghost btn-sm script-editor-goto-close"
+          className="btn btn-ghost btn-sm h-8 w-8 p-0 text-xl leading-none"
           onClick={() => {
             onOpenChange(false)
             getShell()?.editor.focus()
@@ -257,27 +272,51 @@ export function ScriptEditorGoTo({
         </button>
       </div>
       {mode === 'symbol' && filteredSymbols.length > 0 && (
-        <ul className="script-editor-goto-list" ref={listRef}>
-          {filteredSymbols.map((sym, i) => (
-            <li key={`${sym.name}-${sym.line}`}>
-              <button
-                type="button"
-                className={`script-editor-goto-item${i === selectedIndex ? ' is-selected' : ''}`}
-                disabled={disabled}
-                onClick={() => goToSymbol(sym)}
-              >
-                <span className={`script-editor-goto-kind script-editor-goto-kind-${sym.kind}`}>
-                  {sym.kind === 'function' ? 'fn' : sym.kind === 'variable' ? 'var' : 'cls'}
-                </span>
-                <span className="script-editor-goto-name">{sym.name}</span>
-                <span className="script-editor-goto-loc">:{sym.line}</span>
-              </button>
-            </li>
-          ))}
+        <ul className="scrollbar-subtle m-0 max-h-[min(200px,28vh)] list-none space-y-1 overflow-y-auto p-0" ref={listRef}>
+          {filteredSymbols.map((sym, i) => {
+            const selected = i === selectedIndex
+            return (
+              <li key={`${sym.name}-${sym.line}`}>
+                <button
+                  type="button"
+                  className={[
+                    'flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent py-1.5 px-2.5 text-left text-xs text-body transition-colors duration-100',
+                    'rounded-[var(--radius-sm)]',
+                    selected
+                      ? 'bg-accent text-white'
+                      : 'hover:bg-app',
+                  ].join(' ')}
+                  disabled={disabled}
+                  aria-selected={selected}
+                  onClick={() => goToSymbol(sym)}
+                >
+                  <span className={kindBadge(sym.kind, selected)}>
+                    {sym.kind === 'function' ? 'fn' : sym.kind === 'variable' ? 'var' : 'cls'}
+                  </span>
+                  <span
+                    className={[
+                      'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono',
+                      !selected && 'text-body',
+                    ].join(' ')}
+                  >
+                    {sym.name}
+                  </span>
+                  <span
+                    className={[
+                      'shrink-0 font-mono text-[11px] text-muted',
+                      selected && 'text-white/70',
+                    ].join(' ')}
+                  >
+                    :{sym.line}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
         </ul>
       )}
       {mode === 'symbol' && query.trim() && filteredSymbols.length === 0 && (
-        <p className="script-editor-goto-empty">No symbols found</p>
+        <p className="m-0 mt-2 py-2 px-2.5 text-xs text-muted">No symbols found</p>
       )}
     </div>
   )

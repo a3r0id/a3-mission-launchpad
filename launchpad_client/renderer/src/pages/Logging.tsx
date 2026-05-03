@@ -11,43 +11,25 @@ import {
   type RptFileEntry,
   type RptLogListLocation,
 } from '../api/launchpad'
-
-const POLL_MS = 1250
-const INITIAL_TAIL_BYTES = 220_000
-const MAX_BUFFER_CHARS = 1_200_000
-
-function fmtBytes(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return '—'
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`
-  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`
-}
-
-function fmtDate(ts: number): string {
-  if (!Number.isFinite(ts)) return '—'
-  return new Date(ts * 1000).toLocaleString()
-}
-
-function severityClass(line: string): string {
-  const u = line.toUpperCase()
-  if (u.includes(' ERROR ') || u.startsWith('ERROR') || u.includes(' EXCEPTION')) return 'is-error'
-  if (u.includes(' WARNING ') || u.startsWith('WARNING')) return 'is-warn'
-  if (u.includes(' SCRIPT ') || u.includes('ASSERT')) return 'is-script'
-  if (u.includes(' SERVER ') || u.includes(' CLIENT ')) return 'is-net'
-  return ''
-}
-
-function trimLogBuffer(text: string): string {
-  if (text.length <= MAX_BUFFER_CHARS) return text
-  const sliced = text.slice(text.length - MAX_BUFFER_CHARS)
-  const firstNewline = sliced.indexOf('\n')
-  return firstNewline >= 0 ? sliced.slice(firstNewline + 1) : sliced
-}
-
-function escapeRegex(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
+import {
+  escapeRegex,
+  INITIAL_TAIL_BYTES,
+  logLineSeverityTextClass,
+  LogFileMetaGrid,
+  LogFolderPathHint,
+  LogPageAlerts,
+  LogRptToolbar,
+  LogSourceRow,
+  LogViewer,
+  POLL_MS,
+  RemoteConnectDialog,
+  RemoteLogToolbar,
+  RemoteManualPathRow,
+  trimLogBuffer,
+  type LogFindMatch,
+  type LogLineEntry,
+  logsUi,
+} from '../components/Logs'
 
 export function LoggingPage() {
   const [logFolderKind, setLogFolderKind] = useState<RptLogListLocation>('profile')
@@ -131,35 +113,38 @@ export function LoggingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remoteServerId])
 
-  const refreshList = useCallback(async (source: RptLogListLocation = logFolderKind) => {
-    const reqId = listReqIdRef.current + 1
-    listReqIdRef.current = reqId
-    setLoadingList(true)
-    setListErr(null)
-    try {
-      if (source === 'remote' && !remoteSessionId) {
-        throw new Error('Connect to a remote server first.')
+  const refreshList = useCallback(
+    async (source: RptLogListLocation = logFolderKind) => {
+      const reqId = listReqIdRef.current + 1
+      listReqIdRef.current = reqId
+      setLoadingList(true)
+      setListErr(null)
+      try {
+        if (source === 'remote' && !remoteSessionId) {
+          throw new Error('Connect to a remote server first.')
+        }
+        const res =
+          source === 'remote'
+            ? await fetchRemoteRptFiles(remoteSessionId, remoteFolder)
+            : await fetchRptFiles(source)
+        if (listReqIdRef.current !== reqId) return
+        setFiles(res.rpt_files)
+        setFolder(res.folder)
+        if (!selectedPath && res.rpt_files.length > 0) {
+          setSelectedPath(res.rpt_files[0].path)
+        } else if (selectedPath && !res.rpt_files.some((f) => f.path === selectedPath)) {
+          setSelectedPath(res.rpt_files[0]?.path ?? '')
+        }
+      } catch (e) {
+        if (listReqIdRef.current !== reqId) return
+        setListErr(e instanceof Error ? e.message : 'Could not list log files')
+        setFiles([])
+      } finally {
+        if (listReqIdRef.current === reqId) setLoadingList(false)
       }
-      const res =
-        source === 'remote'
-          ? await fetchRemoteRptFiles(remoteSessionId, remoteFolder)
-          : await fetchRptFiles(source)
-      if (listReqIdRef.current !== reqId) return
-      setFiles(res.rpt_files)
-      setFolder(res.folder)
-      if (!selectedPath && res.rpt_files.length > 0) {
-        setSelectedPath(res.rpt_files[0].path)
-      } else if (selectedPath && !res.rpt_files.some((f) => f.path === selectedPath)) {
-        setSelectedPath(res.rpt_files[0]?.path ?? '')
-      }
-    } catch (e) {
-      if (listReqIdRef.current !== reqId) return
-      setListErr(e instanceof Error ? e.message : 'Could not list log files')
-      setFiles([])
-    } finally {
-      if (listReqIdRef.current === reqId) setLoadingList(false)
-    }
-  }, [selectedPath, logFolderKind, remoteSessionId, remoteFolder])
+    },
+    [selectedPath, logFolderKind, remoteSessionId, remoteFolder],
+  )
 
   useEffect(() => {
     void refreshList()
@@ -232,17 +217,21 @@ export function LoggingPage() {
     return () => window.clearInterval(id)
   }, [paused, selectedPath, pollTail])
 
-  const lines = useMemo(() => {
+  const lines: LogLineEntry[] = useMemo(() => {
     if (!tailText) return []
     const rows = tailText.split(/\r?\n/)
-    return rows.map((line, idx) => ({ idx, line, cls: severityClass(line) }))
+    return rows.map((line, idx) => ({
+      idx,
+      line,
+      severityClass: logLineSeverityTextClass(line),
+    }))
   }, [tailText])
 
-  const findMatches = useMemo(() => {
+  const findMatches: LogFindMatch[] = useMemo(() => {
     const q = findQuery.trim()
-    if (!q) return [] as { id: string; lineIdx: number; start: number; end: number }[]
+    if (!q) return []
     const rx = new RegExp(escapeRegex(q), 'gi')
-    const out: { id: string; lineIdx: number; start: number; end: number }[] = []
+    const out: LogFindMatch[] = []
     for (const row of lines) {
       rx.lastIndex = 0
       let m: RegExpExecArray | null
@@ -257,7 +246,7 @@ export function LoggingPage() {
   }, [lines, findQuery])
 
   const matchesByLine = useMemo(() => {
-    const map = new Map<number, { id: string; lineIdx: number; start: number; end: number }[]>()
+    const map = new Map<number, LogFindMatch[]>()
     for (const m of findMatches) {
       const existing = map.get(m.lineIdx)
       if (existing) existing.push(m)
@@ -267,11 +256,11 @@ export function LoggingPage() {
   }, [findMatches])
 
   const matchIndexById = useMemo(() => {
-    const map = new Map<string, number>()
+    const r = new Map<string, number>()
     for (let i = 0; i < findMatches.length; i += 1) {
-      map.set(findMatches[i].id, i)
+      r.set(findMatches[i].id, i)
     }
-    return map
+    return r
   }, [findMatches])
 
   useEffect(() => {
@@ -320,7 +309,7 @@ export function LoggingPage() {
     try {
       await closeRemoteSshSession(remoteSessionId)
     } catch {
-      /* ignore close errors */
+      /* ignore */
     }
     setRemoteSessionId('')
     setRemoteConnErr(null)
@@ -376,352 +365,101 @@ export function LoggingPage() {
   }
 
   return (
-    <div className="page-stack logging-page">
-      {/* <header className="page-header">
-        <h1 className="page-title">Logs</h1>
-        <p className="page-lead">
-          Open an RPT from your game profile or from Arma 3 Tools and follow it live while things run.
-        </p>
-      </header> */}
-
-      <section className="card form-card">
-        <div className="logging-source-row">
-          <span className="field-label" id="logging-source-label">
-            Logs from
-          </span>
-          <div
-            className="logging-source-switch"
-            role="group"
-            aria-labelledby="logging-source-label"
-          >
-            <button
-              type="button"
-              className={`logging-source-btn${logFolderKind === 'profile' ? ' is-active' : ''}`}
-              onClick={() => switchLogSource('profile')}
-              aria-pressed={logFolderKind === 'profile'}
-            >
-              Profile
-            </button>
-            <button
-              type="button"
-              className={`logging-source-btn${logFolderKind === 'tools' ? ' is-active' : ''}`}
-              onClick={() => switchLogSource('tools')}
-              aria-pressed={logFolderKind === 'tools'}
-            >
-              Tools
-            </button>
-            <button
-              type="button"
-              className={`logging-source-btn${logFolderKind === 'remote' ? ' is-active' : ''}`}
-              onClick={() => switchLogSource('remote')}
-              aria-pressed={logFolderKind === 'remote'}
-            >
-              Remote
-            </button>
-          </div>
-        </div>
-        {logFolderKind === 'remote' ? (
-          <div className="logging-toolbar">
-            <label className="field logging-file-select">
-              <span className="field-label">Remote server</span>
-              <select
-                className="field-input"
-                value={remoteServerId}
-                onChange={(e) => setRemoteServerId(e.target.value)}
-                disabled={remoteConnectBusy}
-              >
-                <option value="">Select a server</option>
-                {remoteServers.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.name} ({row.username}@{row.host}:{row.port})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field logging-file-select">
-              <span className="field-label">Remote folder</span>
-              <input
-                type="text"
-                className="field-input"
-                value={remoteFolder}
-                onChange={(e) => setRemoteFolder(e.target.value)}
-                spellCheck={false}
+    <div className={logsUi.page}>
+      <div className={logsUi.stack}>
+        <header className={logsUi.pageHeader}>
+          <h1 className={logsUi.pageTitle}>Logs</h1>
+          <p className={logsUi.pageLead}>
+            Choose where to read from, pick a file, and watch new lines as they appear.
+          </p>
+        </header>
+        <div className={logsUi.mainColumn}>
+          <div className={logsUi.controls}>
+            <LogSourceRow value={logFolderKind} onChange={switchLogSource} />
+            {logFolderKind === 'remote' ? (
+              <RemoteLogToolbar
+                remoteServers={remoteServers}
+                remoteServerId={remoteServerId}
+                onRemoteServerId={setRemoteServerId}
+                remoteFolder={remoteFolder}
+                onRemoteFolder={setRemoteFolder}
+                remoteConnectBusy={remoteConnectBusy}
+                remoteSessionId={remoteSessionId}
+                loadingList={loadingList}
+                onConnectOrDisconnect={() =>
+                  void (remoteSessionId ? disconnectRemoteSession() : requestRemoteConnect())
+                }
+                onRefreshRemote={() => void refreshList('remote')}
               />
-            </label>
-            <div className="logging-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => void (remoteSessionId ? disconnectRemoteSession() : requestRemoteConnect())}
-                disabled={remoteConnectBusy}
-              >
-                {remoteSessionId ? 'Disconnect' : 'Connect'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => void refreshList('remote')}
-                disabled={!remoteSessionId || loadingList}
-              >
-                Refresh remote files
-              </button>
-            </div>
-          </div>
-        ) : null}
-        <div className="logging-toolbar">
-          <label className="field logging-file-select">
-            <span className="field-label">RPT file</span>
-            <select
-              className="field-input"
-              value={selectedPath}
-              onChange={(e) => setSelectedPath(e.target.value)}
-              disabled={loadingList || !files.length}
-            >
-              {!files.length ? <option value="">No RPT files</option> : null}
-              {files.map((f) => (
-                <option key={f.path} value={f.path}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="logging-actions">
-            <button type="button" className="btn btn-ghost" onClick={() => void refreshList()} disabled={loadingList}>
-              Refresh files
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => setPaused((p) => !p)} disabled={!selectedPath}>
-              {paused ? 'Resume live' : 'Pause live'}
-            </button>
-            <label className="logging-follow">
-              <input
-                type="checkbox"
-                checked={followTail}
-                onChange={(e) => setFollowTail(e.target.checked)}
-              />
-              <span>Auto-follow</span>
-            </label>
-          </div>
-        </div>
-
-        {logFolderKind === 'remote' ? (
-          <div className="logging-toolbar">
-            <label className="field logging-file-select">
-              <span className="field-label">Manual remote file path</span>
-              <input
-                className="field-input"
-                type="text"
-                value={remoteManualPath}
-                onChange={(e) => setRemoteManualPath(e.target.value)}
-                placeholder="/home/steam/arma3/server_console.rpt"
-                spellCheck={false}
-              />
-            </label>
-            <div className="logging-actions">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={!remoteSessionId || !remoteManualPath.trim()}
-                onClick={() => {
+            ) : null}
+            <LogRptToolbar
+              files={files}
+              selectedPath={selectedPath}
+              onSelectedPath={setSelectedPath}
+              loadingList={loadingList}
+              onRefreshFiles={() => void refreshList()}
+              paused={paused}
+              onTogglePause={() => setPaused((p) => !p)}
+              followTail={followTail}
+              onFollowTailChange={setFollowTail}
+            />
+            {logFolderKind === 'remote' ? (
+              <RemoteManualPathRow
+                remoteManualPath={remoteManualPath}
+                onRemoteManualPath={setRemoteManualPath}
+                remoteSessionId={remoteSessionId}
+                onTailManualPath={() => {
                   const p = remoteManualPath.trim()
                   if (!p) return
                   setSelectedPath(p)
                 }}
-              >
-                Tail manual path
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {folder ? (
-          <p className="field-hint">
-            Source folder: <span className="shell-inline-code">{folder}</span>
-          </p>
-        ) : null}
-
-        {selected ? (
-          <div className="logging-meta-grid">
-            <div><strong>Name:</strong> {selected.name}</div>
-            <div><strong>Size:</strong> {fmtBytes(fileSize || selected.size)}</div>
-            <div><strong>Modified:</strong> {fmtDate(selected.modified_ts)}</div>
-            <div><strong>Last poll:</strong> {lastPollTs ? new Date(lastPollTs).toLocaleTimeString() : '—'}</div>
-          </div>
-        ) : null}
-
-        {loadingList ? <p className="card-body">Loading files…</p> : null}
-        {remoteConnErr ? <p className="form-banner form-banner-error" role="alert">{remoteConnErr}</p> : null}
-        {listErr ? <p className="form-banner form-banner-error" role="alert">{listErr}</p> : null}
-        {tailErr ? <p className="form-banner form-banner-error" role="alert">{tailErr}</p> : null}
-
-        <div className="log-view-shell">
-          <div className="log-view-head">
-            <span className={`log-live-dot${!paused && selectedPath ? ' is-live' : ''}`} />
-            <span>{!selectedPath ? 'Select a file' : paused ? 'Live paused' : 'Live tailing'}</span>
-            <span className="log-view-spacer" />
-            <div className="log-find">
-              <input
-                type="text"
-                className="field-input log-find-input"
-                value={findQuery}
-                onChange={(e) => setFindQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    stepMatch(e.shiftKey ? -1 : 1)
-                  }
-                }}
-                placeholder="Find in log"
-                spellCheck={false}
-                aria-label="Find text in log"
               />
-              <span className="log-find-count">
-                {findMatches.length ? `${activeMatchIdx + 1}/${findMatches.length}` : '0/0'}
-              </span>
-              <button
-                type="button"
-                className="btn btn-ghost btn-xs"
-                onClick={() => stepMatch(-1)}
-                disabled={!findMatches.length}
-                aria-label="Previous match"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-xs"
-                onClick={() => stepMatch(1)}
-                disabled={!findMatches.length}
-                aria-label="Next match"
-              >
-                ↓
-              </button>
-            </div>
-            <button
-              type="button"
-              className="btn btn-ghost btn-xs"
-              onClick={() => {
+            ) : null}
+            <LogFolderPathHint folder={folder} />
+            {selected ? (
+              <LogFileMetaGrid selected={selected} fileSize={fileSize} lastPollTs={lastPollTs} />
+            ) : null}
+            <LogPageAlerts
+              loadingList={loadingList}
+              remoteConnErr={remoteConnErr}
+              listErr={listErr}
+              tailErr={tailErr}
+            />
+          </div>
+          <div className={logsUi.viewerColumn}>
+            <LogViewer
+              logPaneRef={logPaneRef}
+              lines={lines}
+              findQuery={findQuery}
+              onFindQuery={setFindQuery}
+              findMatches={findMatches}
+              activeMatchIdx={activeMatchIdx}
+              matchesByLine={matchesByLine}
+              matchIndexById={matchIndexById}
+              onSetActiveMatchIdx={setActiveMatchIdx}
+              onStepMatch={stepMatch}
+              paused={paused}
+              selectedPath={selectedPath}
+              onReload={() => {
                 setTailText('')
                 setCursor(0)
                 void loadInitialTail()
               }}
-              disabled={!selectedPath}
-            >
-              Reload
-            </button>
-          </div>
-          <div className="log-view-pane" ref={logPaneRef}>
-            {lines.length === 0 ? (
-              <p className="log-empty">No log lines yet.</p>
-            ) : (
-              <pre className="log-pre">
-                {lines.map((entry) => {
-                  const q = findQuery.trim()
-                  if (!q) {
-                    return (
-                      <div key={entry.idx} className={`log-line ${entry.cls}`}>
-                        {entry.line || ' '}
-                      </div>
-                    )
-                  }
-                  const lineMatches = matchesByLine.get(entry.idx) ?? []
-                  if (!lineMatches.length) {
-                    return (
-                      <div key={entry.idx} className={`log-line ${entry.cls}`}>
-                        {entry.line || ' '}
-                      </div>
-                    )
-                  }
-                  let cursorPos = 0
-                  return (
-                    <div key={entry.idx} className={`log-line ${entry.cls}`}>
-                      {lineMatches.map((m) => {
-                        const start = m.start
-                        const end = m.end
-                        const isActive = findMatches[activeMatchIdx]?.id === m.id
-                        const before = entry.line.slice(cursorPos, start)
-                        const hit = entry.line.slice(start, end)
-                        cursorPos = end
-                        return (
-                          <span key={m.id}>
-                            {before}
-                            <button
-                              type="button"
-                              className={`log-find-hit${isActive ? ' is-active' : ''}`}
-                              data-find-id={m.id}
-                              onClick={() => {
-                                const i = matchIndexById.get(m.id) ?? -1
-                                if (i >= 0) setActiveMatchIdx(i)
-                              }}
-                            >
-                              {hit}
-                            </button>
-                          </span>
-                        )
-                      })}
-                      {entry.line.slice(cursorPos) || (entry.line.length === 0 ? ' ' : '')}
-                    </div>
-                  )
-                })}
-              </pre>
-            )}
+            />
           </div>
         </div>
-      </section>
-      {remoteAuthDialogOpen ? (
-        <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="remote-connect-title">
-          <button
-            type="button"
-            className="modal-backdrop"
-            aria-label="Close dialog"
-            onClick={() => !remoteConnectBusy && setRemoteAuthDialogOpen(false)}
-          />
-          <div className="modal-dialog">
-            <h2 id="remote-connect-title" className="card-title">
-              Connect remote server
-            </h2>
-            <p className="card-body" style={{ margin: 0 }}>
-              {selectedRemoteServer
-                ? `${selectedRemoteServer.username}@${selectedRemoteServer.host}:${selectedRemoteServer.port}`
-                : 'Selected server'}
-            </p>
-            {selectedRemoteServer?.auth === 'password' ? (
-              <label className="field" style={{ marginTop: 12 }}>
-                <span className="field-label">Password</span>
-                <input
-                  type="password"
-                  className="field-input"
-                  value={remotePasswordInput}
-                  onChange={(e) => setRemotePasswordInput(e.target.value)}
-                  autoComplete="current-password"
-                />
-              </label>
-            ) : (
-              <label className="field" style={{ marginTop: 12 }}>
-                <span className="field-label">Key passphrase (optional)</span>
-                <input
-                  type="password"
-                  className="field-input"
-                  value={remotePassphraseInput}
-                  onChange={(e) => setRemotePassphraseInput(e.target.value)}
-                  autoComplete="off"
-                />
-              </label>
-            )}
-            <div className="modal-actions" style={{ marginTop: 16 }}>
-              <button type="button" className="btn btn-primary" onClick={() => void submitRemoteConnect()} disabled={remoteConnectBusy}>
-                {remoteConnectBusy ? 'Connecting…' : 'Connect'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => setRemoteAuthDialogOpen(false)}
-                disabled={remoteConnectBusy}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      </div>
+      <RemoteConnectDialog
+        open={remoteAuthDialogOpen}
+        remoteConnectBusy={remoteConnectBusy}
+        selectedRemoteServer={selectedRemoteServer}
+        remotePasswordInput={remotePasswordInput}
+        onRemotePasswordInput={setRemotePasswordInput}
+        remotePassphraseInput={remotePassphraseInput}
+        onRemotePassphraseInput={setRemotePassphraseInput}
+        onClose={() => setRemoteAuthDialogOpen(false)}
+        onSubmit={submitRemoteConnect}
+      />
     </div>
   )
 }

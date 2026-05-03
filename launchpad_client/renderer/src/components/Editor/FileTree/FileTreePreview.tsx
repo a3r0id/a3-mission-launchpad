@@ -67,16 +67,16 @@ export function FileTreePreview({
   return (
     <div
       ref={tooltipRef}
-      className="file-tree-preview"
+      className="pointer-events-none fixed z-[1001] max-w-[220px] rounded-[var(--radius)] border border-border bg-surface p-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)]"
       style={{ left: position.x, top: position.y }}
     >
       {loading ? (
-        <div className="file-tree-preview-loading">Loading...</div>
+        <div className="p-1 text-[11px] text-muted">Loading...</div>
       ) : previewData?.type === 'image' && previewData.imageData ? (
-        <div className="file-tree-preview-image">
+        <div className="flex flex-col items-center gap-1.5">
           <canvas
             ref={canvasRef}
-            className="file-tree-preview-canvas"
+            className="rounded-[var(--radius-sm)] [background:repeating-conic-gradient(#e0e0e0_0%_25%,#fff_0%_50%)_50%_/_10px_10px] dark:[background:repeating-conic-gradient(#333_0%_25%,#222_0%_50%)_50%_/_10px_10px]"
             style={{
               maxWidth: 160,
               maxHeight: 120,
@@ -84,30 +84,34 @@ export function FileTreePreview({
               height: 'auto',
             }}
           />
-          <div className="file-tree-preview-meta">
+          <div className="text-center text-[10px] text-muted">
             {previewData.imageData.width} × {previewData.imageData.height}
           </div>
         </div>
       ) : previewData?.type === 'text' && previewData.content ? (
-        <div className="file-tree-preview-text">
-          <pre className="file-tree-preview-code">{previewData.content}</pre>
+        <div className="max-h-[120px] overflow-hidden">
+          <pre className="m-0 break-all p-0 font-mono text-[10px] leading-snug text-muted [word-break:break-all] [overflow-wrap:anywhere] [white-space:pre-wrap]">
+            {previewData.content}
+          </pre>
           {previewData.lineCount != null && (
-            <div className="file-tree-preview-meta">{previewData.lineCount} lines</div>
+            <div className="text-center text-[10px] text-muted">{previewData.lineCount} lines</div>
           )}
         </div>
       ) : previewData?.type === 'config' ? (
-        <div className="file-tree-preview-config">
-          <div className="file-tree-preview-meta">
+        <div className="flex flex-col gap-1">
+          <div className="text-center text-[10px] text-muted">
             {previewData.classCount != null
               ? `${previewData.classCount} classes`
               : 'Config file'}
           </div>
           {previewData.content && (
-            <pre className="file-tree-preview-code">{previewData.content}</pre>
+            <pre className="m-0 break-all p-0 font-mono text-[10px] leading-snug text-muted [word-break:break-all] [overflow-wrap:anywhere] [white-space:pre-wrap]">
+              {previewData.content}
+            </pre>
           )}
         </div>
       ) : (
-        <div className="file-tree-preview-none">No preview available</div>
+        <div className="p-1 text-[11px] text-muted">No preview available</div>
       )}
     </div>
   )

@@ -21,7 +21,7 @@ export type UseInlineEditResult = {
   isEditing: (rel: string) => boolean
 }
 
-export function useInlineEdit({ onConfirm, onCancel }: UseInlineEditProps): UseInlineEditResult {
+export function useInlineEdit({ onConfirm: _onConfirm, onCancel }: UseInlineEditProps): UseInlineEditResult {
   const [editState, setEditState] = useState<InlineEditState>(null)
 
   const startRename = useCallback((rel: string, kind: 'file' | 'dir', currentName: string) => {
@@ -127,11 +127,20 @@ export function InlineEditInput({ initialValue, mode, onConfirm, onCancel }: Inl
   }, [value, validate, handleConfirm, onCancel])
 
   return (
-    <div className="file-tree-inline-edit">
+    <div className="flex min-w-0 flex-1 flex-col">
       <input
         ref={inputRef}
         type="text"
-        className={`file-tree-inline-input${error ? ' has-error' : ''}`}
+        className={[
+          "w-full rounded-sm border border-accent bg-surface px-1.5 py-0.5 font-inherit text-xs text-foreground [box-shadow:0_0_0_2px_rgba(9,105,218,0.2)]",
+          "focus:border-accent focus:outline-none focus:[box-shadow:0_0_0_2px_rgba(9,105,218,0.3)]",
+          "dark:[box-shadow:0_0_0_2px_rgba(88,166,255,0.2)] dark:focus:[box-shadow:0_0_0_2px_rgba(88,166,255,0.3)]",
+          error
+            ? "border-error [box-shadow:0_0_0_2px_color-mix(in_srgb,var(--error)_20%,transparent)]"
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
         value={value}
         onChange={(e) => {
           setValue(e.target.value)
@@ -143,7 +152,7 @@ export function InlineEditInput({ initialValue, mode, onConfirm, onCancel }: Inl
         spellCheck={false}
         autoComplete="off"
       />
-      {error && <div className="file-tree-inline-error">{error}</div>}
+      {error && <div className="mt-0.5 px-0.5 text-[10px] text-error">{error}</div>}
     </div>
   )
 }

@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCompress, faExpand } from '@fortawesome/free-solid-svg-icons'
 import { MissionResourceBrowser, type ScriptEditorEnvironment } from '../MissionResourceBrowser'
 
 export type { ScriptEditorEnvironment } from '../MissionResourceBrowser'
@@ -29,6 +27,10 @@ export type IntegratedScriptEditorProps = {
   projectRoot: string
   disabled?: boolean
   environment?: ScriptEditorEnvironment
+  contextTitle?: string
+  fullscreen?: boolean
+  onFullscreenToggle?: () => void
+  onClose?: () => void
 }
 
 /**
@@ -37,10 +39,18 @@ export type IntegratedScriptEditorProps = {
  * In ``mod`` mode, the browser runs project checks and lists results (see ``MissionResourceBrowser``),
  * including opening a reported file from a result and scrolling the editor to that line.
  */
-export function IntegratedScriptEditor({ projectRoot, disabled, environment = 'mission' }: IntegratedScriptEditorProps) {
+export function IntegratedScriptEditor({ projectRoot, disabled, environment = 'mission', contextTitle, fullscreen, onFullscreenToggle, onClose }: IntegratedScriptEditorProps) {
   return (
-    <div className="integrated-script-editor">
-      <MissionResourceBrowser projectRoot={projectRoot} disabled={disabled} environment={environment} />
+    <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col">
+      <MissionResourceBrowser
+        projectRoot={projectRoot}
+        disabled={disabled}
+        environment={environment}
+        contextTitle={contextTitle}
+        fullscreen={fullscreen}
+        onFullscreenToggle={onFullscreenToggle}
+        onClose={onClose}
+      />
     </div>
   )
 }
@@ -91,7 +101,7 @@ export function ScriptEditorModal({
     return (e: React.PointerEvent<HTMLButtonElement>) => {
       if (e.button !== 0) return
       e.preventDefault()
-      const shell = e.currentTarget.closest('.script-editor-modal-dialog')
+      const shell = e.currentTarget.closest('[data-script-editor-dialog]')
       const rect = shell?.getBoundingClientRect()
       if (!rect) return
       resizeSession.current = {
@@ -130,17 +140,22 @@ export function ScriptEditorModal({
 
   return (
     <div
-      className={`modal-root modal-root-stacked${fullscreen ? ' script-editor-modal-root--fullscreen' : ''}`}
+      className={`modal-root modal-root-stacked${fullscreen ? ' p-0' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="script-editor-modal-title"
     >
       <button type="button" className="modal-backdrop" aria-label="Close dialog" onClick={() => onClose()} />
       <div
-        className={`modal-dialog modal-dialog-wide mission-edit-dialog script-editor-modal-dialog${fullscreen ? ' script-editor-modal-dialog--fullscreen' : ''}`}
+        data-script-editor-dialog
+        className={`modal-dialog modal-dialog-wide mission-edit-dialog box-border flex min-h-0 min-w-0 flex-col overflow-hidden ${
+          fullscreen
+            ? 'script-editor-dialog--fullscreen fixed inset-0 z-[1] !m-0 !h-[100dvh] !w-[100vw] !min-w-0 !max-w-none !max-h-none rounded-none !pb-0'
+            : 'relative max-w-[calc(100vw-48px)] max-h-[min(92vh,960px)] w-[min(1120px,100%)]'
+        }`}
         style={
           fullscreen
-            ? { width: '100%', height: '100%', maxWidth: 'none', maxHeight: 'none' }
+            ? undefined
             : {
                 width: frame.w,
                 height: frame.h,
@@ -149,50 +164,36 @@ export function ScriptEditorModal({
               }
         }
       >
-        <header className="mission-edit-header">
-          <div className="mission-edit-header-main">
-            <p className="mission-edit-eyebrow">Script editor</p>
-            <h2 id="script-editor-modal-title" className="mission-edit-title">
-              {contextTitle.trim() || 'Project folder'}
-            </h2>
-          </div>
-          <div className="mission-edit-header-actions">
-            <button
-              type="button"
-              className="mission-edit-icon-btn"
-              onClick={() => setFullscreen((v) => !v)}
-              aria-pressed={fullscreen}
-              aria-label={fullscreen ? 'Use smaller window' : 'Use full window'}
-            >
-              <FontAwesomeIcon icon={fullscreen ? faCompress : faExpand} />
-            </button>
-            <button type="button" className="mission-edit-close" onClick={() => onClose()} aria-label="Close">
-              <span aria-hidden>×</span>
-            </button>
-          </div>
-        </header>
-        <div className="mission-edit-surface mission-edit-section-flush script-editor-modal-body">
-          <IntegratedScriptEditor projectRoot={root} disabled={disabled} environment={environment} />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <IntegratedScriptEditor
+            projectRoot={root}
+            disabled={disabled}
+            environment={environment}
+            contextTitle={contextTitle.trim() || 'Project folder'}
+            fullscreen={fullscreen}
+            onFullscreenToggle={() => setFullscreen((v) => !v)}
+            onClose={onClose}
+          />
         </div>
         {!fullscreen && (
           <>
             <button
               type="button"
-              className="script-editor-resize script-editor-resize-e"
+              className="absolute top-0 right-0 bottom-[18px] z-[4] w-2.5 cursor-ew-resize border-0 bg-transparent p-0 hover:bg-[rgba(9,105,218,0.06)] dark:hover:bg-[rgba(88,166,255,0.08)]"
               aria-label="Resize width"
               onPointerDown={onResizePointerDown('e')}
               style={{ touchAction: 'none' }}
             />
             <button
               type="button"
-              className="script-editor-resize script-editor-resize-s"
+              className="absolute bottom-0 left-2.5 right-[18px] z-[4] h-2.5 cursor-ns-resize border-0 bg-transparent p-0 hover:bg-[rgba(9,105,218,0.06)] dark:hover:bg-[rgba(88,166,255,0.08)]"
               aria-label="Resize height"
               onPointerDown={onResizePointerDown('s')}
               style={{ touchAction: 'none' }}
             />
             <button
               type="button"
-              className="script-editor-resize script-editor-resize-se"
+              className="absolute right-0 bottom-0 z-[4] h-[18px] w-[18px] cursor-nwse-resize rounded-br-[var(--radius-lg)] border-0 bg-transparent p-0 hover:bg-[rgba(9,105,218,0.06)] dark:hover:bg-[rgba(88,166,255,0.08)]"
               aria-label="Resize window"
               onPointerDown={onResizePointerDown('se')}
               style={{ touchAction: 'none' }}

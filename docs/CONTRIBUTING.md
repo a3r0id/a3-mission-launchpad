@@ -57,6 +57,10 @@ Optional: after changing the companion mod or extension, run `build_mod.bat` / `
 
 Keep in-app strings focused on what **mission authors and modders** need, not internal implementation details (channel names, stack traces, framework jargon). Match tone and vocabulary of existing pages unless you are writing developer-only docs.
 
+### Renderer UI (Tailwind)
+
+For `launchpad_client/renderer`: prefer **Tailwind** + **`globals.css` tokens** (see `@theme` in `src/index.css`). Extend **`src/styles/`** (legacy chrome imported via `legacy-chrome.css`) only for patterns reused broadly; migrate toward Tailwind when editing a screen. Avoid duplicate “Util” blobs — extend `src/utils/` with focused modules behind `utils/index.ts`. Details: **`launchpad_client/renderer/STYLING.md`**.
+
 ## Pull request expectations
 
 - Keep the change **scoped** (one feature, bugfix, or migration slice).

@@ -1,0 +1,73 @@
+﻿/* Full-window splash until assets are ready (see SplashScreen.tsx) */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-app);
+  transition: opacity 0.35s ease;
+  opacity: 1;
+}
+
+.splash-screen--hide {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-screen__img {
+  max-width: min(88vw, 720px);
+  max-height: min(70vh, 560px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.14));
+}
+
+@media (prefers-color-scheme: dark) {
+  .splash-screen__img {
+    filter: drop-shadow(0 12px 36px rgba(0, 0, 0, 0.45));
+  }
+}
+
+/* Spinner (see Spinner.tsx) */
+@keyframes lp-spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lp-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+  box-sizing: border-box;
+  width: var(--lp-spinner-size, clamp(14px, 2.6vmin, 20px));
+  height: var(--lp-spinner-size, clamp(14px, 2.6vmin, 20px));
+  border-radius: 50%;
+  border-style: solid;
+  border-width: max(2px, calc(var(--lp-spinner-size, 16px) * 0.11));
+  border-color: color-mix(in srgb, var(--lp-spinner-color, #ffffff) 28%, transparent);
+  border-top-color: var(--lp-spinner-color, #ffffff);
+  animation: lp-spinner-spin 0.72s linear infinite;
+}
+
+.lp-spinner--sm {
+  --lp-spinner-size: clamp(12px, 1.9vmin, 15px);
+}
+
+.lp-spinner--md {
+  --lp-spinner-size: clamp(14px, 2.6vmin, 20px);
+}
+
+.lp-spinner--lg {
+  --lp-spinner-size: clamp(18px, 3.2vmin, 26px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-spinner {
+    animation-duration: 1.35s;
+  }
+}
+

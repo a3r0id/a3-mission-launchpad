@@ -1,0 +1,71 @@
+:root {
+  color-scheme: light dark;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans',
+    Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas,
+    monospace;
+
+  --bg-app: #e8eaed;
+  --bg-sidebar: #f3f4f6;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f6f8fa;
+  --border: #d8dee4;
+  --border-strong: #c9d1d9;
+  --text: #3d4349;
+  --text-muted: #5c646f;
+  --text-heading: #1f2328;
+  --accent: #0969da;
+  --accent-hover: #0550ae;
+  --accent-soft: rgba(9, 105, 218, 0.08);
+  --danger: #cf222e;
+  --danger-soft: rgba(207, 34, 46, 0.08);
+  --success: #1a7f37;
+  --shadow-sm: 0 1px 0 rgba(31, 35, 40, 0.04);
+  --shadow-md: 0 3px 6px rgba(140, 149, 159, 0.15);
+  --radius: 6px;
+  --radius-lg: 10px;
+  --focus: 0 0 0 3px rgba(9, 105, 218, 0.35);
+  --text-body: var(--text);
+  --text-primary: var(--text);
+  --error: var(--danger);
+  --radius-sm: 4px;
+  --warning: #9a6700;
+  --fg: var(--text);
+  --fg-muted: var(--text-muted);
+  --bg-elevated: var(--bg-surface);
+  --file-icon-folder: #e8a838;
+  --file-icon-script: #4fc3f7;
+  --file-icon-image: #81c784;
+  --file-icon-model: #ba68c8;
+  --file-icon-config: #ffb74d;
+  --file-icon-description: #90a4ae;
+  --file-icon-audio: #f06292;
+  --file-icon-archive: #a1887f;
+  --file-icon-data: #7986cb;
+  --file-icon-generic: var(--text-muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-app: #1a1d21;
+    --bg-sidebar: #22262c;
+    --bg-surface: #2b3036;
+    --bg-subtle: #252a30;
+    --border: #3d444d;
+    --border-strong: #4b535e;
+    --text: #c8d0da;
+    --text-muted: #9aa4b2;
+    --text-heading: #f0f3f7;
+    --accent: #58a6ff;
+    --accent-hover: #79b8ff;
+    --accent-soft: rgba(88, 166, 255, 0.12);
+    --danger: #ff7b72;
+    --danger-soft: rgba(255, 123, 114, 0.12);
+    --success: #56d364;
+    --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --focus: 0 0 0 3px rgba(88, 166, 255, 0.35);
+    --warning: #d4a72c;
+  }
+}

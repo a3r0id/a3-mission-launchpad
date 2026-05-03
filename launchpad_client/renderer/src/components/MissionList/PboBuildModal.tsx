@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ManagedScenario } from '../../api/launchpad'
-import Util, { PboOutputExistsError } from '../../Util'
+import Util, { PboOutputExistsError } from '../../utils'
 import { FileFolderInput } from '../FileFolderInput'
 import { fullMissionName, defaultPboOutputFolder } from './missionUtils'
 

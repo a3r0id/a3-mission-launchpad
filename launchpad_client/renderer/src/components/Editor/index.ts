@@ -10,9 +10,6 @@ export type { ScriptEditorTabsProps, OpenFileTab } from './ScriptEditorTabs'
 export { ScriptEditorGoTo } from './ScriptEditorGoTo'
 export type { ScriptEditorGoToProps, SymbolEntry } from './ScriptEditorGoTo'
 
-export { ScriptEditorToolbar } from './ScriptEditorToolbar'
-export type { ScriptEditorToolbarProps } from './ScriptEditorToolbar'
-
 export {
   FileTree,
   fileBasename,

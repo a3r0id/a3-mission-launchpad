@@ -103,7 +103,7 @@ export function useFileTreeDragDrop({
     [disabled, dragState.draggingRel],
   )
 
-  const onDragLeave = useCallback((e: React.DragEvent) => {
+  const onDragLeave = useCallback((_e: React.DragEvent) => {
     dragCounterRef.current--
     if (dragCounterRef.current === 0) {
       setDragState((prev) => ({
@@ -173,10 +173,19 @@ export function useFileTreeDragDrop({
   const getDropIndicatorClass = useCallback(
     (rel: string): string => {
       if (dragState.dropTargetRel !== rel) return ''
-      if (dragState.dropPosition === 'inside') return 'drop-target-inside'
-      if (dragState.dropPosition === 'before') return 'drop-target-before'
-      if (dragState.dropPosition === 'after') return 'drop-target-after'
-      return ''
+      if (dragState.dropPosition === 'inside') {
+        return [
+          "[&_button.file-tree-row]:bg-[color-mix(in_srgb,var(--accent)_15%,transparent)]",
+          "[&_button.file-tree-row]:outline [&_button.file-tree-row]:-outline-offset-2 [&_button.file-tree-row]:outline-2 [&_button.file-tree-row]:outline-dashed [&_button.file-tree-row]:outline-[var(--accent)]",
+        ].join(" ")
+      }
+      if (dragState.dropPosition === 'before') {
+        return "before:content-[''] before:mx-2 before:mb-0.5 before:block before:h-0.5 before:rounded-sm before:bg-accent"
+      }
+      if (dragState.dropPosition === 'after') {
+        return "after:content-[''] after:mx-2 after:mt-0.5 after:block after:h-0.5 after:rounded-sm after:bg-accent"
+      }
+      return ""
     },
     [dragState.dropTargetRel, dragState.dropPosition],
   )

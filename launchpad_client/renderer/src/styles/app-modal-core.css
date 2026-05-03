@@ -1,0 +1,85 @@
+﻿.modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* No padding here: padding left a transparent ring so body / OS chrome showed as a light â€œborderâ€. */
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.modal-root-stacked {
+  z-index: 90;
+}
+
+.modal-dialog-confirm {
+  width: min(440px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+}
+
+.pbo-overwrite-lead {
+  margin-top: 0;
+}
+
+.pbo-overwrite-path {
+  margin-top: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.pbo-overwrite-actions {
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  z-index: 0;
+  display: block;
+  width: auto;
+  height: auto;
+  background: rgba(10, 12, 18, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  /* Subpixel / compositor seams at viewport edges (common with backdrop-filter). */
+  transform: translateZ(0);
+}
+
+.modal-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(520px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+  margin: 24px;
+  max-height: min(640px, 100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 18px 16px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.modal-dialog-wide {
+  width: min(960px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+  max-height: min(88vh, 920px);
+}
+
+.mission-list-script-row {
+  margin-top: 10px;
+}
+
+.mod-project-script-row {
+  margin-top: 8px;
+}
+

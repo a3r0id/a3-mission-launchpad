@@ -22,12 +22,12 @@ export function FileTreeToolbar({
   disabled,
 }: FileTreeToolbarProps) {
   return (
-    <div className="file-tree-toolbar">
-      <span className="file-tree-toolbar-title">Files</span>
-      <div className="file-tree-toolbar-actions">
+    <div className="flex items-center gap-2 border-b border-border px-2.5 py-2">
+      <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Files</span>
+      <div className="flex items-center gap-0.5">
         <button
           type="button"
-          className="file-tree-toolbar-btn"
+          className="flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border-0 bg-transparent text-xs text-muted transition-[background,color] duration-100 hover:enabled:bg-app hover:enabled:text-heading disabled:cursor-default disabled:opacity-40"
           onClick={onNewFile}
           disabled={disabled}
           title="New File"
@@ -37,7 +37,7 @@ export function FileTreeToolbar({
         </button>
         <button
           type="button"
-          className="file-tree-toolbar-btn"
+          className="flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border-0 bg-transparent text-xs text-muted transition-[background,color] duration-100 hover:enabled:bg-app hover:enabled:text-heading disabled:cursor-default disabled:opacity-40"
           onClick={onExpandAll}
           disabled={disabled}
           title="Expand All"
@@ -47,7 +47,7 @@ export function FileTreeToolbar({
         </button>
         <button
           type="button"
-          className="file-tree-toolbar-btn"
+          className="flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border-0 bg-transparent text-xs text-muted transition-[background,color] duration-100 hover:enabled:bg-app hover:enabled:text-heading disabled:cursor-default disabled:opacity-40"
           onClick={onCollapseAll}
           disabled={disabled}
           title="Collapse All"
@@ -57,7 +57,7 @@ export function FileTreeToolbar({
         </button>
         <button
           type="button"
-          className="file-tree-toolbar-btn"
+          className="flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border-0 bg-transparent text-xs text-muted transition-[background,color] duration-100 hover:enabled:bg-app hover:enabled:text-heading disabled:cursor-default disabled:opacity-40"
           onClick={onRefresh}
           disabled={disabled}
           title="Refresh"

@@ -5,7 +5,7 @@ import {
   type ManagedScenario,
   type MissionLaunchMod,
 } from '../../api/launchpad'
-import Util from '../../Util'
+import Util from '../../utils'
 import { fullMissionName, missionModRowKey } from './missionUtils'
 
 type ModsProfileModalProps = {
@@ -191,7 +191,7 @@ export function ModsProfileModal({ mission, onClose, onModsUpdated }: ModsProfil
               </p>
             ) : null}
             {rows.length === 0 ? (
-              <p className="card-body" style={{ color: 'var(--text-muted)' }}>
+              <p className="card-body text-muted">
                 No mods saved for this mission.
               </p>
             ) : (

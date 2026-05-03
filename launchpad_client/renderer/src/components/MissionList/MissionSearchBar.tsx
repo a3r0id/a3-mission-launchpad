@@ -28,12 +28,16 @@ export function MissionSearchBar({ value, onChange, placeholder = 'Search missio
   }, [onChange])
 
   return (
-    <div className="mission-search">
-      <FontAwesomeIcon icon={faSearch} className="mission-search-icon" />
+    <div className="relative flex w-60 items-center">
+      <FontAwesomeIcon
+        icon={faSearch}
+        className="pointer-events-none absolute left-2.5 text-xs text-muted"
+      />
       <input
         ref={inputRef}
         type="text"
-        className="mission-search-input"
+        className="w-full rounded-md border border-border bg-subtle py-1.5 pl-8 pr-8 text-[13px] text-foreground transition-[border-color,background-color] duration-100 placeholder:text-muted focus:border-accent focus:bg-surface focus:outline-none"
+        style={{ font: 'inherit' }}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -42,7 +46,7 @@ export function MissionSearchBar({ value, onChange, placeholder = 'Search missio
       {value && (
         <button
           type="button"
-          className="mission-search-clear"
+          className="absolute right-1.5 flex h-5 w-5 items-center justify-center rounded-full border-0 bg-transparent p-0 text-[10px] text-muted transition-[background-color,color] duration-100 hover:bg-subtle hover:text-heading"
           onClick={() => {
             onChange('')
             inputRef.current?.focus()

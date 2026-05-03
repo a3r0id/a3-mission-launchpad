@@ -1,10 +1,22 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import {
   fetchMissionBuild,
   fetchSettings,
   type LaunchpadSettings,
   type MissionBuildResponse,
 } from '../api/launchpad'
+import {
+  AlertBanner,
+  BusyBar,
+  CheckboxField,
+  CodeInline,
+  InputField,
+  LoadingState,
+  ResultPanel,
+  SelectField,
+  WarningBadge,
+} from '../components/MissionList/custom'
 import {
   ARMA_MAP_CHOICES,
   ARMA_MAP_CUSTOM_ID,
@@ -16,6 +28,7 @@ type MissionBuildPageProps = {
   onGoSettings?: () => void
   embedded?: boolean
   onBuilt?: (result: MissionBuildResponse) => void
+  footerPortal?: RefObject<HTMLElement | null>
 }
 
 type FormState = {
@@ -27,27 +40,50 @@ type FormState = {
   game_type: GameTypeTypes
 }
 
-type GameTypeTypes = 
-| 'Unknown'
-| 'DM'
-| 'CTF'
-| 'Coop'
-| 'CTI'
-| 'SC'
-| 'TDM'
-| 'RPG'
-| 'Sandbox'
-| 'KOTH'
-| 'LastMan'
-| 'Survive'
-| 'Zeus'
-| 'Support'
-| 'EndGame'
-| 'Apex'
-| 'Escape'
-| 'Patrol'
-| 'Vanguard'
-| 'Warlords'
+type GameTypeTypes =
+  | 'Unknown'
+  | 'DM'
+  | 'CTF'
+  | 'Coop'
+  | 'CTI'
+  | 'SC'
+  | 'TDM'
+  | 'RPG'
+  | 'Sandbox'
+  | 'KOTH'
+  | 'LastMan'
+  | 'Survive'
+  | 'Zeus'
+  | 'Support'
+  | 'EndGame'
+  | 'Apex'
+  | 'Escape'
+  | 'Patrol'
+  | 'Vanguard'
+  | 'Warlords'
+
+const GAME_TYPE_OPTIONS: { value: GameTypeTypes; label: string }[] = [
+  { value: 'Unknown', label: 'Not set' },
+  { value: 'DM', label: 'Deathmatch' },
+  { value: 'CTF', label: 'Capture the flag' },
+  { value: 'Coop', label: 'Co-op' },
+  { value: 'CTI', label: 'Capture the island' },
+  { value: 'SC', label: 'Sector control' },
+  { value: 'TDM', label: 'Team deathmatch' },
+  { value: 'RPG', label: 'Roleplay' },
+  { value: 'Sandbox', label: 'Sandbox' },
+  { value: 'KOTH', label: 'King of the hill' },
+  { value: 'LastMan', label: 'Last man standing' },
+  { value: 'Survive', label: 'Survival' },
+  { value: 'Zeus', label: 'Zeus' },
+  { value: 'Support', label: 'Support' },
+  { value: 'EndGame', label: 'End game' },
+  { value: 'Apex', label: 'Apex campaign' },
+  { value: 'Escape', label: 'Escape' },
+  { value: 'Patrol', label: 'Combat patrol' },
+  { value: 'Vanguard', label: 'Vanguard' },
+  { value: 'Warlords', label: 'Warlords' },
+]
 
 const initial: FormState = {
   mission_name: '',
@@ -63,7 +99,7 @@ type SettingsGate =
   | { status: 'error'; message: string }
   | { status: 'ready'; data: LaunchpadSettings }
 
-export function MissionBuildPage({ onGoSettings, embedded = false, onBuilt }: MissionBuildPageProps) {
+export function MissionBuildPage({ onGoSettings, embedded = false, onBuilt, footerPortal }: MissionBuildPageProps) {
   const [form, setForm] = useState<FormState>(initial)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<MissionBuildResponse | null>(null)
@@ -97,40 +133,28 @@ export function MissionBuildPage({ onGoSettings, embedded = false, onBuilt }: Mi
   }, [settingsGate])
 
   const profileReady =
-    settingsGate.status === 'ready' &&
-    settingsGate.data.arma3_profile_path.trim().length > 0
-  const settingsBlockReason =
-    settingsGate.status === 'loading'
-      ? 'loading'
-      : settingsGate.status === 'error'
-        ? 'error'
-        : !profileReady
-          ? 'no_profile'
-          : null
+    settingsGate.status === 'ready' && settingsGate.data.arma3_profile_path.trim().length > 0
 
   const missionNameTrim = form.mission_name.trim()
   const mapSuffixTrim = form.map_suffix.trim()
-  const missionFullNamePreview = `${missionNameTrim || 'mission_name'}.${mapSuffixTrim || 'map_suffix'}`
+  const missionFullNamePreview = `${missionNameTrim || 'mission_name'}.${mapSuffixTrim || 'map'}`
   const mapSelectId = mapSelectIdForSuffix(form.map_suffix)
   const mapChoice = armaMapChoiceBySuffix(form.map_suffix)
+  const canSubmit =
+    settingsGate.status === 'ready' && profileReady && !busy
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setClientError(null)
     setResult(null)
-    const defaultAuthorTrim =
-      settingsGate.status === 'ready' ? settingsGate.data.default_author.trim() : ''
+    const defaultAuthorTrim = settingsGate.status === 'ready' ? settingsGate.data.default_author.trim() : ''
     const effectiveAuthor = form.author.trim() || defaultAuthorTrim
     if (!form.mission_name.trim() || !form.map_suffix.trim() || !effectiveAuthor) {
-      setClientError(
-        'Please fill in mission name and map suffix, and either author or a default author in Settings.',
-      )
+      setClientError('Add a mission name and map, and an author (or a default in Settings).')
       return
     }
     if (!profileReady) {
-      setClientError(
-        'Configure your Arma 3 profile folder under Settings before building a mission.',
-      )
+      setClientError('Set your profile folder in Settings first.')
       return
     }
     setBusy(true)
@@ -154,278 +178,241 @@ export function MissionBuildPage({ onGoSettings, embedded = false, onBuilt }: Mi
     }
   }
 
+  const mapOptions = useMemo(
+    () => [
+      ...ARMA_MAP_CHOICES.map((m) => ({
+        value: m.id,
+        label: `${m.title} — ${m.scaleLine}${m.needsContent ? ` (needs ${m.needsContent})` : ''}`,
+      })),
+      { value: ARMA_MAP_CUSTOM_ID, label: 'Other…' },
+    ],
+    [],
+  )
+
+  const gameTypeOptions = useMemo(
+    () => GAME_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+    [],
+  )
+
+  const networkOptions = useMemo(
+    () => [
+      { value: 'Singleplayer', label: 'Singleplayer' },
+      { value: 'Multiplayer', label: 'Multiplayer' },
+    ],
+    [],
+  )
+
+  const mapHint = (
+    <span>
+      Your mission folder will be <CodeInline>{missionFullNamePreview}</CodeInline>.
+      {mapChoice ? <> {mapChoice.about}</> : null}
+      {!mapChoice && mapSelectId === ARMA_MAP_CUSTOM_ID ? (
+        <> Use the same world name Arma uses after the dot in the folder name.</>
+      ) : null}
+    </span>
+  )
+
+  const actionButtons = (
+    <div className={embedded ? 'flex items-center gap-2' : 'form-actions'}>
+      <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
+        {busy ? 'Building…' : 'Build mission'}
+      </button>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        disabled={busy}
+        onClick={() => {
+          const fallbackAuthor =
+            settingsGate.status === 'ready' ? settingsGate.data.default_author.trim() : ''
+          setForm({ ...initial, author: fallbackAuthor })
+          setResult(null)
+          setClientError(null)
+        }}
+      >
+        Reset
+      </button>
+    </div>
+  )
+
+  const formFields = settingsGate.status === 'ready' ? (
+    <>
+      {!profileReady && (
+        <AlertBanner
+          variant="warning"
+          title="Profile folder needed"
+          action={
+            onGoSettings ? (
+              <button type="button" className="btn btn-primary" onClick={onGoSettings}>
+                Open settings
+              </button>
+            ) : null
+          }
+        >
+          <p className="m-0">
+            In Settings, choose the folder that contains <CodeInline>missions</CodeInline> and{' '}
+            <CodeInline>mpmissions</CodeInline>. That location is required before a build can run.
+          </p>
+        </AlertBanner>
+      )}
+
+      <InputField
+        id="mission_name"
+        name="mission_name"
+        label="Mission name"
+        autoComplete="off"
+        placeholder="my_coop_op"
+        value={form.mission_name}
+        onChange={(ev) => setForm((f) => ({ ...f, mission_name: ev.target.value }))}
+        hint="Folder name only — the map is chosen below."
+      />
+
+      <div className="flex flex-col gap-1.5">
+        <SelectField
+          id="map_preset"
+          name="map_preset"
+          label="Map"
+          value={mapSelectId}
+          onChange={(nextId) => {
+            if (nextId === ARMA_MAP_CUSTOM_ID) {
+              setForm((f) => ({ ...f, map_suffix: '' }))
+              return
+            }
+            const row = ARMA_MAP_CHOICES.find((m) => m.id === nextId)
+            if (row) setForm((f) => ({ ...f, map_suffix: row.worldSuffix }))
+          }}
+          options={mapOptions}
+          hint={mapHint}
+        />
+        {mapSelectId === ARMA_MAP_CUSTOM_ID ? (
+          <InputField
+            id="map_suffix_custom"
+            name="map_suffix"
+            autoComplete="off"
+            label="Map suffix"
+            placeholder="e.g. Takistan"
+            value={form.map_suffix}
+            onChange={(ev) => setForm((f) => ({ ...f, map_suffix: ev.target.value }))}
+          />
+        ) : null}
+        {mapChoice?.needsContent ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <WarningBadge>Requires: {mapChoice.needsContent}</WarningBadge>
+          </div>
+        ) : null}
+      </div>
+
+      <InputField
+        id="author"
+        name="author"
+        label="Author"
+        autoComplete="name"
+        placeholder="Your name"
+        value={form.author}
+        onChange={(ev) => setForm((f) => ({ ...f, author: ev.target.value }))}
+        hint="Shown in the mission list. Fills from Settings if you leave it blank."
+      />
+
+      <SelectField
+        id="network_type"
+        name="network_type"
+        label="Mode"
+        value={form.network_type}
+        onChange={(v) =>
+          setForm((f) => ({
+            ...f,
+            network_type: v as 'Singleplayer' | 'Multiplayer',
+          }))
+        }
+        options={networkOptions}
+      />
+
+      <CheckboxField
+        id="generate_scripting_environment"
+        name="generate_scripting_environment"
+        label="Scripting support"
+        checked={form.generate_scripting_environment}
+        onChange={(ev) => setForm((f) => ({ ...f, generate_scripting_environment: ev.target.checked }))}
+        description="Adds event scripts and a small functions library. Turn this on if you expect to add scripts or extend the mission in code."
+      />
+
+      <SelectField
+        id="game_type"
+        name="game_type"
+        label="Game type"
+        value={form.game_type}
+        onChange={(v) => setForm((f) => ({ ...f, game_type: v as GameTypeTypes }))}
+        options={gameTypeOptions}
+        hint="Optional. Pick the closest style, or leave as not set."
+      />
+
+      {clientError && (
+        <AlertBanner variant="error" title="Cannot start the build">
+          <p className="m-0">{clientError}</p>
+        </AlertBanner>
+      )}
+
+      {busy ? <BusyBar /> : null}
+
+      {result ? <ResultPanel result={result} compact={embedded} /> : null}
+
+      {!embedded && actionButtons}
+    </>
+  ) : null
+
+  const footerPortalTarget = footerPortal?.current
+
   return (
-    <div className="page-stack">
+    <div className={embedded ? 'flex min-h-0 flex-col gap-4' : 'page-stack'}>
       {!embedded ? (
         <header className="page-header">
           <h1 className="page-title">New Mission</h1>
-          <p className="page-lead">
-            Fill in the details below to create a new mission.
-          </p>
+          <p className="page-lead">Fill in the details below to create a new mission.</p>
         </header>
       ) : null}
 
-      <form className={embedded ? 'form-card' : 'card form-card'} onSubmit={onSubmit} >
-        {/* <h2 className="card-title">Mission details</h2> */}
+      <form
+        className={embedded ? 'flex min-h-0 flex-1 flex-col gap-4' : 'card form-card flex flex-col gap-4'}
+        onSubmit={onSubmit}
+        id={footerPortalTarget ? 'mission-build-form' : undefined}
+        noValidate
+      >
+        {settingsGate.status === 'loading' && <LoadingState label="Loading settings…" />}
 
-        {settingsGate.status === 'loading' && (
-          <p className="card-body" role="status">
-            Checking settings…
-          </p>
-        )}
         {settingsGate.status === 'error' && (
-          <p className="form-banner form-banner-error" role="alert">
-            {settingsGate.message} Mission build needs settings from the server.
-          </p>
-        )}
-        {settingsBlockReason === 'no_profile' && (
-          <p className="form-banner form-banner-error" role="alert">
-            Set your Arma 3 profile folder in Settings (the directory that contains{' '}
-            <span className="shell-inline-code">missions</span> and{' '}
-            <span className="shell-inline-code">mpmissions</span>). That path is required before a
-            mission can be generated.
-            {onGoSettings ? (
-              <>
-                {' '}
-                <button type="button" className="btn btn-primary" onClick={onGoSettings}>
-                  Open Settings
-                </button>
-              </>
-            ) : null}
-          </p>
+          <AlertBanner variant="error" title="Settings unavailable">
+            <p className="m-0">We could not load your settings. Please try again.</p>
+            {settingsGate.message ? <p className="m-0 text-[12px] text-[var(--text-muted)]">{settingsGate.message}</p> : null}
+          </AlertBanner>
         )}
 
-        <label className="field">
-          <span className="field-label">Mission name</span>
-          <input
-            className="field-input"
-            name="mission_name"
-            autoComplete="off"
-            placeholder="my_coop_op"
-            value={form.mission_name}
-            onChange={(ev) =>
-              setForm((f) => ({ ...f, mission_name: ev.target.value }))
-            }
-          />
-          <span className="field-hint">Folder name without the map suffix.</span>
-        </label>
+        {formFields}
 
-        <label className="field">
-          <span className="field-label">Map</span>
-          <select
-            className="field-input"
-            name="map_preset"
-            value={mapSelectId}
-            onChange={(ev) => {
-              const id = ev.target.value
-              if (id === ARMA_MAP_CUSTOM_ID) {
-                setForm((f) => ({ ...f, map_suffix: '' }))
-                return
-              }
-              const row = ARMA_MAP_CHOICES.find((m) => m.id === id)
-              if (row) setForm((f) => ({ ...f, map_suffix: row.worldSuffix }))
-            }}
-          >
-            {ARMA_MAP_CHOICES.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.title} — {m.scaleLine}
-                {m.needsContent ? ` (needs ${m.needsContent})` : ''}
-              </option>
-            ))}
-            <option value={ARMA_MAP_CUSTOM_ID}>Other…</option>
-          </select>
-          {mapSelectId === ARMA_MAP_CUSTOM_ID ? (
-            <input
-              className="field-input"
-              style={{ marginTop: 8 }}
-              name="map_suffix"
-              autoComplete="off"
-              placeholder="World suffix, e.g. Takistan"
-              value={form.map_suffix}
-              onChange={(ev) => setForm((f) => ({ ...f, map_suffix: ev.target.value }))}
-            />
-          ) : null}
-          <span className="field-hint">
-            Mission folder will be{' '}
-            <code className="shell-inline-code">{missionFullNamePreview}</code>.
-            {mapChoice ? (
-              <> {mapChoice.about}</>
-            ) : mapSelectId === ARMA_MAP_CUSTOM_ID ? (
-              <> Use the exact world name Arma uses after the dot in the mission folder.</>
-            ) : null}
-          </span>
-        </label>
-
-        <label className="field">
-          <span className="field-label">Author</span>
-          <input
-            className="field-input"
-            name="author"
-            autoComplete="name"
-            placeholder="Your name"
-            value={form.author}
-            onChange={(ev) => setForm((f) => ({ ...f, author: ev.target.value }))}
-          />
-        </label>
-
-        <label className="field">
-          <span className="field-label">Network Type</span>
-          <select
-            className="field-input"
-            name="network_type"
-            value={form.network_type}
-            onChange={(ev) => setForm((f) => ({ ...f, network_type: ev.target.value as 'Singleplayer' | 'Multiplayer' }))}
-          >
-            <option value="Singleplayer">Singleplayer</option>
-            <option value="Multiplayer">Multiplayer</option>
-          </select>
-        </label>
-
-        <label className="field">
-          <div className="field-label-container">
-            <span className="field-label">Generate Scripting Environment?</span>
-            <br />
-            <input
-              type="checkbox"
-              className="field-input"
-              name="generate_scripting_environment"
-              checked={form.generate_scripting_environment}
-              onChange={(ev) => setForm((f) => ({ ...f, generate_scripting_environment: ev.target.checked }))}
-            />
-          </div>
-          <span className="field-hint">
-            Generates a scripting environment for the mission. Event scripts and a functions library will be generated.
-            This is extremely useful for creating missions that require scripting, especially for beginners.
-          </span>
-        </label>
-
-        <label className="field">
-          <span className="field-label">Game Type</span>
-          <select 
-            className="field-input"
-            name="game_type"
-            value={form.game_type}
-            onChange={(ev) => setForm((f) => ({ ...f, game_type: ev.target.value as GameTypeTypes }))}
-          >
-            <option value="Unknown">Undefined Game Mode</option>
-            <option value="DM">Deathmatch</option>
-            <option value="CTF">Capture The Flag</option>
-            <option value="Coop">Cooperative Mission</option>
-            <option value="CTI">Capture The Island</option>
-            <option value="SC">Sector Control</option>
-            <option value="TDM">Team Deathmatch</option>
-            <option value="RPG">Role-Playing Game</option>
-            <option value="Sandbox">Sandbox</option>
-            <option value="KOTH">King Of The Hill</option>
-            <option value="LastMan">Last Man Standing</option>
-            <option value="Survive">Survival</option>
-            <option value="Zeus">Zeus</option>
-            <option value="Support">Support</option>
-            <option value="EndGame">End Game</option>
-            <option value="Apex">Campaign - Apex Protocol</option>
-            <option value="Escape">Escape</option>
-            <option value="Patrol">Combat Patrol</option>
-            <option value="Vanguard">Vanguard</option>
-            <option value="Warlords">Warlords</option>
-          </select>
-          <span className="field-hint">
-            The game type of the mission.
-          </span>
-        </label>
-
-        {clientError && (
-          <p className="form-banner form-banner-error" role="alert">
-            {clientError}
-          </p>
-        )}
-
-        <div className="form-actions">
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={busy || settingsBlockReason !== null}
-          >
-            {busy ? 'Building…' : 'Build mission'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={busy}
-            onClick={() => {
-              const fallbackAuthor =
-                settingsGate.status === 'ready'
-                  ? settingsGate.data.default_author.trim()
-                  : ''
-              setForm({ ...initial, author: fallbackAuthor })
-              setResult(null)
-              setClientError(null)
-            }}
-          >
-            Reset
-          </button>
-        </div>
+        {!footerPortalTarget && embedded && settingsGate.status === 'ready' && actionButtons}
       </form>
 
-      {result && (
-        <section
-          className={`${embedded ? '' : 'card '}result-card${result.status === 0 ? ' is-ok' : ' is-err'}`}
-          aria-live="polite"
-        >
-          <h2 className="card-title">Response</h2>
-          <dl className="result-dl">
-            <div>
-              <dt>Status</dt>
-              <dd>{result.status === 0 ? 'Success (0)' : 'Error (1)'}</dd>
-            </div>
-            {result.mission_path && (
-              <div>
-                <dt>Mission path</dt>
-                <dd>
-                  <code className="shell-inline-code">{result.mission_path}</code>
-                </dd>
-              </div>
-            )}
-            {result.mission_id && (
-              <div>
-                <dt>Managed id</dt>
-                <dd>
-                  <code className="shell-inline-code">{result.mission_id}</code>
-                </dd>
-              </div>
-            )}
-            {result.error && (
-              <div>
-                <dt>Error</dt>
-                <dd>{result.error}</dd>
-              </div>
-            )}
-          </dl>
-          {(result.messages.length > 0 || result.warnings.length > 0) && (
-            <div className="result-lists">
-              {result.messages.length > 0 && (
-                <div>
-                  <div className="result-list-title">Messages</div>
-                  <ul>
-                    {result.messages.map((m, i) => (
-                      <li key={`m-${i}`}>{m}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {result.warnings.length > 0 && (
-                <div>
-                  <div className="result-list-title">Warnings</div>
-                  <ul>
-                    {result.warnings.map((w, i) => (
-                      <li key={`w-${i}`}>{w}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-      )}
+      {footerPortalTarget && settingsGate.status === 'ready' &&
+        createPortal(
+          <div className="flex items-center gap-2">
+            <button type="submit" form="mission-build-form" className="btn btn-primary" disabled={!canSubmit}>
+              {busy ? 'Building…' : 'Build mission'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={() => {
+                const fallbackAuthor =
+                  settingsGate.status === 'ready' ? settingsGate.data.default_author.trim() : ''
+                setForm({ ...initial, author: fallbackAuthor })
+                setResult(null)
+                setClientError(null)
+              }}
+            >
+              Reset
+            </button>
+          </div>,
+          footerPortalTarget,
+        )}
     </div>
   )
 }

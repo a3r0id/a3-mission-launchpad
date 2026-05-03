@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AppPreferencesDialog } from './components/AppPreferencesDialog'
-import { AppSidebar, type NavId } from './components/AppSidebar'
+import { AppSidebar, useSidebarCollapse, type NavId } from './components/AppSidebar'
 import { SplashScreen } from './components/SplashScreen'
 import { AppPreferencesProvider } from './context/AppPreferencesContext'
 import { getElectronIpc } from './electronIpc'
@@ -11,14 +11,13 @@ import { SettingsPage } from './pages/SettingsPage'
 import { TestingPage } from './pages/Testing'
 import { LoggingPage } from './pages/Logging'
 import { DebuggingPage } from './pages/Debugging'
-import './App.less'
-
 type MenuEventPayload = { event?: string }
 
 export default function App() {
   const [page, setPage] = useState<NavId>('home')
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [settingsKeepAlive, setSettingsKeepAlive] = useState(false)
+  const { collapsed, toggle: toggleSidebar } = useSidebarCollapse()
 
   const openSettings = () => {
     setSettingsKeepAlive(true)
@@ -50,11 +49,16 @@ export default function App() {
             if (id === 'settings') setSettingsKeepAlive(true)
             setPage(id)
           }}
+          collapsed={collapsed}
+          onToggleCollapse={toggleSidebar}
         />
         <div className="shell-main">
-          <main className="shell-content" id="main">
+          <main className="shell-content scrollbar-subtle" id="main">
             {settingsKeepAlive ? (
-              <div hidden={page !== 'settings'}>
+              <div
+                className="h-full min-h-0 w-full min-w-0 overflow-hidden"
+                hidden={page !== 'settings'}
+              >
                 <SettingsPage />
               </div>
             ) : null}

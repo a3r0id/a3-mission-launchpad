@@ -1,0 +1,392 @@
+﻿/* â€”â€” Mission edit modal (dedicated chrome) â€”â€” */
+.mission-edit-dialog {
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  padding-bottom: 16px;
+  gap: 0;
+}
+
+.mission-edit-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 16px;
+  background: linear-gradient(180deg, var(--bg-subtle) 0%, var(--bg-surface) 100%);
+  border-bottom: 1px solid var(--border);
+}
+
+.mission-edit-header-main {
+  min-width: 0;
+}
+
+.mission-edit-eyebrow {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mission-edit-title {
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--text-heading);
+  font-family: var(--font-mono);
+}
+
+.mission-edit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mission-edit-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-heading);
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+}
+
+.mission-edit-pill-accent {
+  background: var(--accent-soft);
+  border-color: rgba(9, 105, 218, 0.22);
+  color: var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mission-edit-pill-accent {
+    border-color: rgba(88, 166, 255, 0.28);
+  }
+}
+
+.mission-edit-header-actions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 2px;
+  margin: -6px -6px 0 0;
+}
+
+.mission-edit-header-actions .mission-edit-close {
+  margin: 0;
+}
+
+.mission-edit-icon-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.mission-edit-icon-btn:hover:not(:disabled) {
+  background: var(--bg-app);
+  border-color: var(--border);
+  color: var(--text-heading);
+}
+
+.mission-edit-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.mission-edit-icon-btn[aria-pressed='true'] {
+  color: var(--accent);
+}
+
+.mission-edit-close {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: -6px -6px 0 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.mission-edit-close:hover:not(:disabled) {
+  background: var(--bg-app);
+  border-color: var(--border);
+  color: var(--text-heading);
+}
+
+.mission-edit-close:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.mission-edit-close:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mission-edit-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 12px;
+  margin: 0 10px;
+  margin-top: 10px;
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+}
+
+.mission-edit-nav-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 14px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.mission-edit-nav-btn:hover:not(:disabled):not(.is-active) {
+  color: var(--text-heading);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mission-edit-nav-btn:hover:not(:disabled):not(.is-active) {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.mission-edit-nav-btn.is-active {
+  background: var(--bg-surface);
+  color: var(--text-heading);
+  box-shadow: var(--shadow-sm);
+}
+
+.mission-edit-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mission-edit-surface {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  margin: 14px 16px 0;
+  padding: 18px 20px 20px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+}
+
+.mission-edit-section-flush {
+  flex: 1;
+  min-height: 0;
+  margin: -18px -20px -20px;
+  padding: 0;
+  border: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  overflow: hidden;
+}
+
+.mission-edit-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ``<label>`` is inline by default â€” force stacked label / input / hint inside the modal. */
+.mission-edit-surface .field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+
+.mission-edit-surface .field-label {
+  flex-shrink: 0;
+}
+
+.mission-edit-surface .field-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.mission-edit-surface .field-hint {
+  margin: 0;
+  line-height: 1.45;
+  max-width: none;
+}
+
+.mission-edit-code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.mission-edit-section-identity .mission-edit-fields-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px 28px;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .mission-edit-section-identity .mission-edit-fields-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+}
+
+.mission-edit-lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 72ch;
+}
+
+.mission-edit-lead strong {
+  color: var(--text-heading);
+}
+
+.mission-edit-field-grow .field-input.mission-ext-json {
+  flex: 1;
+  min-height: min(48vh, 420px);
+  resize: vertical;
+}
+
+.mission-ext-json {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.mission-edit-field-grow {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mission-edit-empty {
+  padding: 28px 22px;
+  text-align: center;
+  background: var(--bg-subtle);
+}
+
+.mission-edit-empty-error {
+  border-top: 1px solid var(--border);
+}
+
+.mission-edit-empty-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.mission-edit-empty-text {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 42ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mission-edit-banner {
+  margin: 0 16px;
+}
+
+.mission-edit-footer {
+  flex-shrink: 0;
+  padding: 14px 20px 18px;
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.mission-edit-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.file-folder-input {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+}
+
+.file-folder-input__field {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-folder-input__browse {
+  flex-shrink: 0;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+}
+
